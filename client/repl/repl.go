@@ -1,3 +1,6 @@
+/*
+ * Implements the prompt REPL used to interact with the LLMs
+ */
 package repl
 
 import (
@@ -5,27 +8,43 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
+
+	"github.com/gregriff/gpt-cli-go/models"
+	"github.com/gregriff/gpt-cli-go/models/anthropic"
 )
 
 type REPL struct {
+	model models.LLM
+
 	scanner *bufio.Scanner
 	history []string
 	vars    map[string]string
+
+	SystemPrompt string
+	ModelName    string
+	TotalCost    float64
+	MaxTokens    int32
 }
 
-func NewREPL() *REPL {
+func NewREPL(systemPrompt string, modelName string, maxTokens int32) *REPL {
 	return &REPL{
 		scanner: bufio.NewScanner(os.Stdin),
 		history: make([]string, 0),
 		vars:    make(map[string]string),
+
+		SystemPrompt: systemPrompt,
+		ModelName:    modelName,
+		TotalCost:    0.,
+		MaxTokens:    maxTokens,
 	}
 }
 
 func (r *REPL) Start() {
 	// TODO: print fancy greeting
-	fmt.Println("GPT-CLI")
+	fmt.Println("\nGPT-CLI")
 	fmt.Println("Commands: :set <var> <value>, :get <var>, :history, :clear, :exit")
+
+	model := anthropic.NewAnthropicModel(r.SystemPrompt, uint32(r.MaxTokens), r.ModelName, nil)
 
 	for {
 		// TODO: color
@@ -58,7 +77,7 @@ func (r *REPL) Start() {
 		} else {
 			responseChan := make(chan string)
 			// TODO: handle API errors here or in this func?
-			go r.promptLLM(input, responseChan)
+			go models.StreamPromptCompletion(model, input, true, responseChan)
 			for resPart := range responseChan {
 				fmt.Print(resPart)
 			}
@@ -91,14 +110,4 @@ func (r *REPL) processInput(s string) (string, bool) {
 	default:
 		return "", false
 	}
-}
-
-func (r *REPL) promptLLM(s string, ch chan string) {
-	fmt.Println("Prompting LLM with " + s)
-	for range 10 {
-		ch <- "abc"
-		time.Sleep(200 * time.Millisecond)
-	}
-	fmt.Println()
-	close(ch)
 }

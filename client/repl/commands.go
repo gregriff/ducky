@@ -1,3 +1,6 @@
+/*
+ * Commands the user can use in the REPL
+ */
 package repl
 
 import (

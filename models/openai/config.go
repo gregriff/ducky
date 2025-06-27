@@ -10,7 +10,7 @@ type OpenAIModelConfig struct {
 	Reasoning           *bool
 }
 
-// GetOpenAIModelConfigs returns properties about an OpenAI Model given a shorthand version of its ID.
+// GetOpenAIModelConfigs returns a map of OpenAI model names to properties about those models
 func GetOpenAIModelConfigs() map[string]OpenAIModelConfig {
 	return map[string]OpenAIModelConfig{
 		"o3": {
