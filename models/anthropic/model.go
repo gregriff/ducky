@@ -5,9 +5,10 @@ package anthropic
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go" // imported as anthropic
+	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gregriff/gpt-cli-go/models"
 )
 
@@ -42,10 +43,23 @@ func NewAnthropicModel(systemPrompt string, maxTokens uint32, modelName string, 
 func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReasoning bool, ch chan string) {
 	defer close(ch)
 
-	// create per-prompt properties (user will be able to change these at any time)
-	maxTokens := int64(llm.MaxTokens)
-	var thinking anthropic.ThinkingConfigParamUnion
-	if thinkingEnabled := llm.ModelConfig.Thinking; thinkingEnabled != nil && *thinkingEnabled && enableReasoning {
+	var (
+		// per-prompt properties (user will be able to change these at any time)
+		maxTokens       int64
+		thinking        anthropic.ThinkingConfigParamUnion
+		thinkingEnabled *bool
+
+		// per-request data
+		ctx              context.Context
+		cancel           context.CancelFunc
+		fullResponseText string
+		stream           *ssestream.Stream[anthropic.MessageStreamEventUnion]
+		message          anthropic.Message
+	)
+
+	maxTokens = int64(llm.MaxTokens)
+	fullResponseText = ""
+	if thinkingEnabled = llm.ModelConfig.Thinking; thinkingEnabled != nil && *thinkingEnabled && enableReasoning {
 		thinking = anthropic.ThinkingConfigParamOfEnabled(maxTokens)
 		if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
 			maxTokens = 2048
@@ -57,19 +71,18 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 		thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
 	}
 
-	llm.Messages = append(llm.Messages, models.Message{Role: "user", Content: content})
-	stream := llm.Client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		// Model:     anthropic.ModelClaude3_7SonnetLatest,
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	stream = llm.Client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(llm.ModelConfig.Id),
 		System:    []anthropic.TextBlockParam{{Text: llm.SystemPrompt}},
 		MaxTokens: maxTokens,
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(content)),
-		},
-		Thinking: thinking,
+		Messages:  buildMessages(llm.Messages, content),
+		Thinking:  thinking,
 	})
 
-	message := anthropic.Message{}
+	message = anthropic.Message{}
 	for stream.Next() {
 		event := stream.Current()
 		err := message.Accumulate(event)
@@ -83,6 +96,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 			case anthropic.ThinkingDelta:
 				ch <- deltaVariant.Thinking
 			case anthropic.TextDelta:
+				fullResponseText += deltaVariant.Text
 				ch <- deltaVariant.Text
 			case anthropic.CitationsDelta:
 				ch <- deltaVariant.Citation.DocumentTitle
@@ -96,15 +110,30 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 
 	// update state
 	llm.PromptCount += 1
-	fullMessageChain := stream.Current().Message.Content
 
-	// TODO: figure out this block in order to preserve history
-	fmt.Println(fullMessageChain)
-	if len(fullMessageChain) > 0 {
-		fullResponse := fullMessageChain[len(fullMessageChain)-1]
-		fmt.Println(fullMessageChain[0])
-		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: fullResponse.Text})
+	if len(fullResponseText) > 0 {
+		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: fullResponseText})
 	}
+}
+
+// buildMessages takes the vendor-agnostic []models.Message of the chat history and returns the Anthropic chat history data format
+func buildMessages(history []models.Message, newContent string) []anthropic.MessageParam {
+	messages := make([]anthropic.MessageParam, 0, len(history)+1)
+
+	// Add conversation history
+	for _, msg := range history {
+		switch msg.Role {
+		case "user":
+			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content)))
+		case "assistant":
+			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content)))
+		}
+	}
+
+	// Add current message
+	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(newContent)))
+
+	return messages
 }
 
 func (llm *AnthropicModel) DoGetCostOfCurrentChat() float64 {

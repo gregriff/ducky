@@ -40,6 +40,13 @@ func NewREPL(systemPrompt string, modelName string, maxTokens int32) *REPL {
 }
 
 func (r *REPL) Start() {
+	// rd, _ := glamour.NewTermRenderer(
+	// 	// detect background color and pick either the default dark or light theme
+	// 	glamour.WithAutoStyle(),
+	// 	// wrap output at specific width (default is 80)
+	// 	glamour.WithWordWrap(40),
+	// )
+
 	// TODO: print fancy greeting
 	fmt.Println("\nGPT-CLI")
 	fmt.Println("Commands: :set <var> <value>, :get <var>, :history, :clear, :exit")
@@ -78,9 +85,20 @@ func (r *REPL) Start() {
 			responseChan := make(chan string)
 			// TODO: handle API errors here or in this func?
 			go models.StreamPromptCompletion(model, input, true, responseChan)
+			fmt.Println()
+			// fullResponseText := ""
 			for resPart := range responseChan {
+				// fullResponseText += resPart
+				// out, err := rd.Render(fullResponseText)
+				// if err != nil {
+				// fmt.Println(err)
+				// return
+				// }
+				// terminal.ClearScreen()
+				// fmt.Print(out)
 				fmt.Print(resPart)
 			}
+			fmt.Println()
 		}
 	}
 }
