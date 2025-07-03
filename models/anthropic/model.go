@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go" // imported as anthropic
-	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/gregriff/gpt-cli-go/models"
 )
 
@@ -19,7 +18,7 @@ type AnthropicModel struct {
 	// TODO: add usage field
 }
 
-func NewAnthropicModel(systemPrompt string, maxTokens uint32, modelName string, pastMessages *[]models.Message) *AnthropicModel {
+func NewAnthropicModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message) *AnthropicModel {
 	// allow message history to persist when user changes model being used
 	var messages []models.Message
 	if pastMessages != nil {
@@ -48,17 +47,10 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 		maxTokens       int64
 		thinking        anthropic.ThinkingConfigParamUnion
 		thinkingEnabled *bool
-
-		// per-request data
-		ctx              context.Context
-		cancel           context.CancelFunc
-		fullResponseText string
-		stream           *ssestream.Stream[anthropic.MessageStreamEventUnion]
-		message          anthropic.Message
 	)
 
 	maxTokens = int64(llm.MaxTokens)
-	fullResponseText = ""
+	fullResponseText := ""
 	if thinkingEnabled = llm.ModelConfig.Thinking; thinkingEnabled != nil && *thinkingEnabled && enableReasoning {
 		thinking = anthropic.ThinkingConfigParamOfEnabled(maxTokens)
 		if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
@@ -71,10 +63,10 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 		thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream = llm.Client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+	stream := llm.Client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(llm.ModelConfig.Id),
 		System:    []anthropic.TextBlockParam{{Text: llm.SystemPrompt}},
 		MaxTokens: maxTokens,
@@ -82,7 +74,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 		Thinking:  thinking,
 	})
 
-	message = anthropic.Message{}
+	message := anthropic.Message{}
 	for stream.Next() {
 		event := stream.Current()
 		err := message.Accumulate(event)

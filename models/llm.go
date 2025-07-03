@@ -9,20 +9,6 @@ type LLM interface {
 	DoClearChatHistory()
 }
 
-// BaseLLM defines fields shared by all supported LLMs
-type BaseLLM struct {
-	SystemPrompt string
-	MaxTokens    uint32
-
-	Messages    []Message
-	PromptCount int
-}
-
-type Message struct {
-	Role    string
-	Content string
-}
-
 // TODO: handle errors
 func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, ch chan string) {
 	llm.DoStreamPromptCompletion(prompt, enableReasoning, ch)
@@ -34,4 +20,18 @@ func GetCostOfCurrentChat(llm LLM) float64 {
 
 func ClearChatHistory(llm LLM) {
 	llm.DoClearChatHistory()
+}
+
+// BaseLLM defines fields shared by all supported LLMs
+type BaseLLM struct {
+	SystemPrompt string
+	MaxTokens    int
+
+	Messages    []Message
+	PromptCount int
+}
+
+type Message struct {
+	Role    string
+	Content string
 }
