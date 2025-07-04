@@ -4,6 +4,6 @@
 
 ## Overview
 
-This project is a rewrite of the GPT-CLI Python repository. It aims to use a better client-server architecture to reduce CPU utilization when multiple (now client) instances are run, allow better configuration with [Viper](https://github.com/spf13/viper) and provide more features (but probably less customizability!) than the previous project.
+This project is a rewrite of the GPT-CLI Python repository. It aims to allow better configuration with [Viper](https://github.com/spf13/viper) and provide more features than the previous project (like automatic per-language syntax highlighting with [Chroma](https://github.com/alecthomas/chroma#identifying-the-language))
 
-I'm doing this rewrite mainly to learn Go and get experience with its concurrency patterns.
+I'm doing this rewrite mainly to learn Go and get experience with its concurrency patterns, standard library and package ecosystem.
