@@ -13,25 +13,6 @@ import (
 	"github.com/muesli/reflow/wordwrap"
 )
 
-var (
-	titleStyle = func() lipgloss.Style {
-		b := lipgloss.RoundedBorder()
-		b.Right = "├"
-		return lipgloss.NewStyle().BorderStyle(b).Padding(0, 1)
-	}()
-
-	infoStyle = func() lipgloss.Style {
-		b := lipgloss.RoundedBorder()
-		b.Left = "┤"
-		return titleStyle.BorderStyle(b)
-	}()
-
-	inputStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderTop(true).
-			Padding(0, 1)
-)
-
 type TUI struct {
 	model models.LLM
 
@@ -52,6 +33,7 @@ type TUI struct {
 	currentResponse strings.Builder
 	isStreaming     bool
 	renderer        *glamour.TermRenderer
+	styles          styles
 }
 
 // Bubbletea messages
@@ -77,6 +59,7 @@ func NewTUI(systemPrompt string, modelName string, maxTokens int) *TUI {
 		responseChan: make(chan string),
 
 		renderer: renderer,
+		styles:   makeStyles(lipgloss.DefaultRenderer()),
 	}
 
 	// Add welcome message to chat history
@@ -268,6 +251,7 @@ func (t *TUI) handleCommand(input string) (string, bool) {
 func (t *TUI) streamLLMResponse(input string, ch chan string) tea.Cmd {
 	return func() tea.Msg {
 		models.StreamPromptCompletion(t.model, input, true, ch)
+		// PROBLEM: streamComplete should only be returned when the channel is closed. Since models.StreamPromptCompletion calls a goroutine, it returns immediately?
 		return streamComplete{}
 	}
 }
@@ -301,16 +285,17 @@ func (t *TUI) View() string {
 		return "\n  Initializing..."
 	}
 
-	inputPrompt := t.inputView()
-	return fmt.Sprintf("%s\n%s\n%s", t.headerView(), t.viewport.View(), inputPrompt)
+	return fmt.Sprintf("%s\n%s\n%s", t.headerView(), t.viewport.View(), t.inputView())
 }
 
 func (t *TUI) headerView() string {
+	style := t.styles.TitleBar
+
 	var title string
 	if t.isStreaming {
-		title = titleStyle.Render("GPT-CLI (streaming...)")
+		title = style.Render("GPT-CLI (streaming...)")
 	} else {
-		title = titleStyle.Render("GPT-CLI")
+		title = style.Render("GPT-CLI")
 	}
 
 	line := strings.Repeat("─", max(0, t.viewport.Width-lipgloss.Width(title)))
@@ -325,12 +310,5 @@ func (t *TUI) inputView() string {
 		prompt = fmt.Sprintf(" > %s", t.input)
 	}
 
-	return inputStyle.Render(prompt)
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
+	return t.styles.InputArea.Render(prompt)
 }
