@@ -11,7 +11,7 @@ type LLM interface {
 
 // TODO: handle errors
 func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, ch chan string) {
-	go llm.DoStreamPromptCompletion(prompt, enableReasoning, ch)
+	llm.DoStreamPromptCompletion(prompt, enableReasoning, ch)
 }
 
 func GetCostOfCurrentChat(llm LLM) float64 {

@@ -137,18 +137,18 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case streamComplete:
 		t.isStreaming = false
-		t.addToChat(t.currentResponse.String() + "\n\n---\n\n")
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
-		t.updateViewportContent()
+		t.addToChat(t.currentResponse.String() + "\n\n---\n\n")
 		t.currentResponse.Reset()
+		t.updateViewportContent()
 		return t, nil
 
 	case streamError:
 		t.isStreaming = false
 		t.addToChat(t.currentResponse.String() + "\n\n---\n\n" + fmt.Sprintf("**Error:** %v\n\n---\n\n", msg.err))
-		t.updateViewportContent()
 		t.currentResponse.Reset()
+		t.updateViewportContent()
 		return t, nil
 
 	case tea.WindowSizeMsg:
@@ -216,7 +216,7 @@ func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
 	t.viewport.GotoBottom()
 
 	return t, tea.Batch(
-		// m.spinnet.Tick,
+		// m.spinner.Tick,
 		t.streamLLMResponse(input, t.responseChan),
 		waitForNextChunk(t.responseChan),
 	)
@@ -251,8 +251,8 @@ func (t *TUI) handleCommand(input string) (string, bool) {
 func (t *TUI) streamLLMResponse(input string, ch chan string) tea.Cmd {
 	return func() tea.Msg {
 		models.StreamPromptCompletion(t.model, input, true, ch)
-		// PROBLEM: streamComplete should only be returned when the channel is closed. Since models.StreamPromptCompletion calls a goroutine, it returns immediately?
-		return streamComplete{}
+		// Return nil to indicate this command is done - waitForNextChunk will handle the reading
+		return nil
 	}
 }
 
@@ -261,7 +261,7 @@ func waitForNextChunk(ch chan string) tea.Cmd {
 		if chunk, ok := <-ch; ok {
 			return streamChunk(chunk)
 		} else {
-			return nil
+			return streamComplete{}
 		}
 	}
 }
