@@ -118,7 +118,7 @@ func (r *REPL) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			r.viewport.GotoBottom()
 		}
 
-		// TODO: impl cancel response
+		// TODO: impl cancel response WITH CONTEXTS
 		// if r.isStreaming && msg.String() == "ctrl+c" {
 		// 	r.isStreaming = false
 		// 	r.addToChat(r.currentResponse.String() + "\n\n---\nResponse terminated\n---\n\n")
@@ -149,7 +149,7 @@ func (r *REPL) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamChunk:
 		r.currentResponse.WriteString(string(msg))
 		r.updateViewportContent()
-		// r.viewport.GotoBottom()
+		r.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
 		return r, waitForNextChunk(r.responseChan)
 
 	case streamComplete:
@@ -178,8 +178,8 @@ func (r *REPL) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			r.viewport.YPosition = headerHeight
 			r.viewport.MouseWheelDelta = 1
 			r.updateViewportContent()
-			r.ready = true
 			r.viewport.GotoBottom()
+			r.ready = true
 		} else {
 			r.viewport.Width = msg.Width
 			r.viewport.Height = msg.Height - verticalMarginHeight
@@ -268,17 +268,17 @@ func (r *REPL) handleCommand(input string) (string, bool) {
 func (r *REPL) streamLLMResponse(input string, ch chan string) tea.Cmd {
 	return func() tea.Msg {
 		models.StreamPromptCompletion(r.model, input, true, ch)
-
-		if chunk, ok := <-ch; ok {
-			return streamChunk(chunk)
-		}
 		return streamComplete{}
 	}
 }
 
 func waitForNextChunk(ch chan string) tea.Cmd {
 	return func() tea.Msg {
-		return streamChunk(<-ch)
+		if chunk, ok := <-ch; ok {
+			return streamChunk(chunk)
+		} else {
+			return nil
+		}
 	}
 }
 

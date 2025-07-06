@@ -46,6 +46,7 @@ gpt-cli-go
 
  # Log files
  *.log
+debug.log
 
  # Temporary files
  *.tmp

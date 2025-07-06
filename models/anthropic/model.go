@@ -5,7 +5,7 @@ package anthropic
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go" // imported as anthropic
 	"github.com/gregriff/gpt-cli-go/models"
@@ -13,8 +13,9 @@ import (
 
 type AnthropicModel struct {
 	models.BaseLLM
-	Client      anthropic.Client
-	ModelConfig AnthropicModelConfig
+	Client             anthropic.Client
+	ModelConfig        AnthropicModelConfig
+	SystemPromptObject []anthropic.TextBlockParam
 	// TODO: add usage field
 }
 
@@ -34,8 +35,9 @@ func NewAnthropicModel(systemPrompt string, maxTokens int, modelName string, pas
 			Messages:     messages,
 			PromptCount:  0, // TODO: ensure total usage cost is persisted between model changes
 		},
-		Client:      anthropic.NewClient(), // by default uses os.LookupEnv("ANTHROPIC_API_KEY") TODO: use viper config var
-		ModelConfig: AnthropicModelConfigurations[modelName],
+		Client:             anthropic.NewClient(), // by default uses os.LookupEnv("ANTHROPIC_API_KEY") TODO: use viper config var
+		ModelConfig:        AnthropicModelConfigurations[modelName],
+		SystemPromptObject: []anthropic.TextBlockParam{{Text: systemPrompt}},
 	}
 }
 
@@ -63,12 +65,9 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 		thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream := llm.Client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+	stream := llm.Client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
 		Model:     anthropic.Model(llm.ModelConfig.Id),
-		System:    []anthropic.TextBlockParam{{Text: llm.SystemPrompt}},
+		System:    llm.SystemPromptObject,
 		MaxTokens: maxTokens,
 		Messages:  buildMessages(llm.Messages, content),
 		Thinking:  thinking,
@@ -79,7 +78,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 		event := stream.Current()
 		err := message.Accumulate(event)
 		if err != nil {
-			panic(err)
+			ch <- fmt.Sprintf("\n\n[Error: %v]", stream.Err())
 		}
 
 		switch eventVariant := event.AsAny().(type) {
@@ -97,7 +96,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 	}
 
 	if stream.Err() != nil {
-		panic(stream.Err())
+		ch <- fmt.Sprintf("\n\n[Error: %v]", stream.Err())
 	}
 
 	// update state
