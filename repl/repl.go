@@ -267,7 +267,7 @@ func (r *REPL) handleCommand(input string) (string, bool) {
 
 func (r *REPL) streamLLMResponse(input string, ch chan string) tea.Cmd {
 	return func() tea.Msg {
-		models.StreamPromptCompletion(r.model, input, true, ch)
+		go models.StreamPromptCompletion(r.model, input, true, ch)
 		return streamComplete{}
 	}
 }
