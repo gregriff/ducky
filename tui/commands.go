@@ -1,14 +1,14 @@
 /*
- * Commands the user can use in the REPL
+ * Commands the user can use in the TUI
  */
-package repl
+package tui
 
 import (
 	"fmt"
 	"strings"
 )
 
-func (r *REPL) handleSet(parts []string) string {
+func (r *TUI) handleSet(parts []string) string {
 	if len(parts) < 3 {
 		return "Usage: set <variable> <value>"
 	}
@@ -20,7 +20,7 @@ func (r *REPL) handleSet(parts []string) string {
 	return fmt.Sprintf("Set %s = %s", variable, value)
 }
 
-func (r *REPL) handleGet(parts []string) string {
+func (r *TUI) handleGet(parts []string) string {
 	if len(parts) != 2 {
 		return "Usage: get <variable>"
 	}
@@ -33,7 +33,7 @@ func (r *REPL) handleGet(parts []string) string {
 	return fmt.Sprintf("Variable '%s' not found", variable)
 }
 
-func (r *REPL) showHistory() string {
+func (r *TUI) showHistory() string {
 	if len(r.history) == 0 {
 		return "No history"
 	}
@@ -46,7 +46,7 @@ func (r *REPL) showHistory() string {
 	return strings.TrimSuffix(result.String(), "\n")
 }
 
-func (r *REPL) showVars() string {
+func (r *TUI) showVars() string {
 	if len(r.vars) == 0 {
 		return "No variables set"
 	}
