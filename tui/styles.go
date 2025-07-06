@@ -2,7 +2,7 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
-type styles struct {
+type Styles struct {
 	TitleBar,
 	InputArea,
 
@@ -11,7 +11,7 @@ type styles struct {
 
 const H_PADDING int = 1
 
-func makeStyles(r *lipgloss.Renderer) (s styles) {
+func makeStyles(r *lipgloss.Renderer) (s Styles) {
 	s.TitleBar = r.NewStyle().
 		Foreground(lipgloss.Color("86")).
 		Faint(true).

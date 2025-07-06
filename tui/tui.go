@@ -6,35 +6,34 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gregriff/gpt-cli-go/models"
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
 	"github.com/muesli/reflow/wordwrap"
 )
 
+// TODO: group some fields into sub-structs (rendererManager)
 type TUI struct {
-	model   models.LLM
-	ModelId string
-
-	history []string
-	vars    map[string]string
-
+	model        models.LLM
+	ModelId      string
 	SystemPrompt string
 	ModelName    string
 	TotalCost    float64
 	MaxTokens    int
-	responseChan chan string
+
+	history []string
+	vars    map[string]string
 
 	// UI state
+	styles          Styles
 	ready           bool
 	viewport        viewport.Model
 	input           string
 	chatHistory     strings.Builder
 	currentResponse strings.Builder
+	responseChan    chan string
 	isStreaming     bool
-	renderer        *glamour.TermRenderer
-	styles          styles
+	renderMgr       *RendererManager
 }
 
 // Bubbletea messages
@@ -43,24 +42,18 @@ type streamComplete struct{}
 type streamError struct{ err error }
 
 func NewTUI(systemPrompt string, modelName string, maxTokens int) *TUI {
-	renderer, _ := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithEmoji(),
-		// glamour.WithWordWrap(80),
-	)
-
 	tui := &TUI{
-		history: make([]string, 0),
-		vars:    make(map[string]string),
-
 		SystemPrompt: systemPrompt,
 		ModelName:    modelName,
 		TotalCost:    0.,
 		MaxTokens:    maxTokens,
-		responseChan: make(chan string),
 
-		renderer: renderer,
-		styles:   makeStyles(lipgloss.DefaultRenderer()),
+		history: make([]string, 0),
+		vars:    make(map[string]string),
+
+		styles:       makeStyles(lipgloss.DefaultRenderer()),
+		responseChan: make(chan string),
+		renderMgr:    NewRendererManager(),
 	}
 
 	tui.initLLMClient(modelName)
@@ -164,12 +157,14 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			t.viewport.YPosition = headerHeight
 			t.viewport.MouseWheelDelta = 1
+			t.renderMgr.ForceCreation(msg.Width)
 			t.updateViewportContent()
 			t.viewport.GotoBottom()
 			t.ready = true
 		} else {
 			t.viewport.Width = msg.Width
 			t.viewport.Height = msg.Height - verticalMarginHeight
+			t.renderMgr.SetWidth(msg.Width)
 		}
 	}
 
@@ -274,7 +269,7 @@ func (t *TUI) addToChat(content string) {
 
 func (t *TUI) updateViewportContent() {
 	fullContent := t.chatHistory.String() + t.currentResponse.String()
-	rendered, err := t.renderer.Render(fullContent)
+	rendered, err := t.renderMgr.Render(fullContent)
 	if err != nil {
 		t.viewport.SetContent(wordwrap.String(fullContent, t.viewport.Width))
 	} else {
