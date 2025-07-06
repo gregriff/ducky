@@ -4,19 +4,24 @@ import "github.com/charmbracelet/lipgloss"
 
 type styles struct {
 	TitleBar,
-	InputArea lipgloss.Style
+	InputArea,
+
+	userText lipgloss.Style
 }
 
+const H_PADDING int = 1
+
 func makeStyles(r *lipgloss.Renderer) (s styles) {
-	titleBorder := lipgloss.RoundedBorder()
-	titleBorder.Right = "├"
 	s.TitleBar = r.NewStyle().
-		BorderStyle(titleBorder).
-		Padding(0, 1)
+		Foreground(lipgloss.Color("86")).
+		Faint(true).
+		Bold(true).
+		BorderStyle(lipgloss.RoundedBorder()).
+		Padding(0, H_PADDING)
 
 	s.InputArea = r.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderTop(true).
-		Padding(0, 1)
+		Padding(0, H_PADDING)
 	return s
 }

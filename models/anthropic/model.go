@@ -107,7 +107,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 	}
 }
 
-// buildMessages takes the vendor-agnostic []models.Message of the chat history and returns the Anthropic chat history data format
+// buildMessages takes the provider-agnostic []models.Message of the chat history and returns the Anthropic chat history data format
 func buildMessages(history []models.Message, newContent string) []anthropic.MessageParam {
 	messages := make([]anthropic.MessageParam, 0, len(history)+1)
 
@@ -135,4 +135,12 @@ func (llm *AnthropicModel) DoClearChatHistory() {
 	llm.PromptCount = 0
 	llm.Messages = []models.Message{}
 	// TODO: reset usage
+}
+
+func (llm *AnthropicModel) DoGetChatHistory() []models.Message {
+	return llm.Messages
+}
+
+func (llm *AnthropicModel) DoGetModelId() string {
+	return llm.ModelConfig.Id
 }

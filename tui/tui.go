@@ -14,7 +14,8 @@ import (
 )
 
 type TUI struct {
-	model models.LLM
+	model   models.LLM
+	ModelId string
 
 	history []string
 	vars    map[string]string
@@ -61,6 +62,8 @@ func NewTUI(systemPrompt string, modelName string, maxTokens int) *TUI {
 		renderer: renderer,
 		styles:   makeStyles(lipgloss.DefaultRenderer()),
 	}
+
+	tui.initLLMClient(modelName)
 
 	// Add welcome message to chat history
 	tui.addToChat("\nCommands: `:set <var> <value>`, `:get <var>`, `:history`, `:clear`, `:exit`\n\n---\n\n")
@@ -110,6 +113,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 	return r, nil
 		// }
 
+		// while streaming, anything below this will not be accessible
 		if t.isStreaming {
 			return t, nil
 		}
@@ -206,9 +210,6 @@ func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
 	}
 
 	// Start LLM streaming
-	if t.model == nil {
-		t.model = anthropic.NewAnthropicModel(t.SystemPrompt, t.MaxTokens, t.ModelName, nil)
-	}
 	t.responseChan = make(chan string)
 	t.isStreaming = true
 	t.addToChat("**Assistant:** ")
@@ -249,9 +250,10 @@ func (t *TUI) handleCommand(input string) (string, bool) {
 }
 
 func (t *TUI) streamLLMResponse(input string, ch chan string) tea.Cmd {
+	// the below runs in a goroutine. It will immediately return, and our Update func has already queued a waitForNextChunk to
+	// receive on the responseChannel
 	return func() tea.Msg {
 		models.StreamPromptCompletion(t.model, input, true, ch)
-		// Return nil to indicate this command is done - waitForNextChunk will handle the reading
 		return nil
 	}
 }
@@ -289,17 +291,20 @@ func (t *TUI) View() string {
 }
 
 func (t *TUI) headerView() string {
-	style := t.styles.TitleBar
+	// TODO: my alacritty term is cropping the term window so i need this
+	const R_PADDING int = H_PADDING * 2
 
-	var title string
+	leftText := "GPT-CLI"
+	rightText := models.GetModelId(t.model)
 	if t.isStreaming {
-		title = style.Render("GPT-CLI (streaming...)")
-	} else {
-		title = style.Render("GPT-CLI")
+		leftText += " (streaming...)" // TODO: loading spinner
 	}
+	maxWidth := t.viewport.Width - R_PADDING
+	titleTextWidth := lipgloss.Width(leftText) + lipgloss.Width(rightText) + 2 // the two border chars
+	spacing := strings.Repeat(" ", max(5, maxWidth-titleTextWidth))
 
-	line := strings.Repeat("─", max(0, t.viewport.Width-lipgloss.Width(title)))
-	return lipgloss.JoinHorizontal(lipgloss.Center, title, line)
+	style := t.styles.TitleBar.Width(max(0, maxWidth))
+	return style.Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
 }
 
 func (t *TUI) inputView() string {
@@ -311,4 +316,41 @@ func (t *TUI) inputView() string {
 	}
 
 	return t.styles.InputArea.Render(prompt)
+}
+
+// initLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
+// in order to switch between LLMs while preserving message history
+func (t *TUI) initLLMClient(modelName string) error {
+	// var pastMessages []models.Message
+	// if t.model != nil {
+	// pastMessages = t.model.DoGetChatHistory()
+	// }
+
+	// Try each provider in order
+	// TODO: improve with the LLM interface.
+	// NOTE: newModelFunc will have different signature for openAI (topP etc). will need to use optional params maybe
+	providers := []struct {
+		validateFunc func(string) error
+		newModelFunc func(string, int, string, *[]models.Message) models.LLM
+	}{
+		{
+			anthropic.ValidateModelName,
+			func(sysPrompt string, maxTokens int, name string, msgs *[]models.Message) models.LLM {
+				return anthropic.NewAnthropicModel(sysPrompt, maxTokens, name, msgs)
+			},
+		},
+		// {openai.ValidateModelName, openai.NewOpenAIModel},
+	}
+
+	for _, provider := range providers {
+		if err := provider.validateFunc(modelName); err == nil {
+			// does not return an error, should it? Also, any cleanup we need to do?
+			t.model = provider.newModelFunc(t.SystemPrompt, t.MaxTokens, modelName, nil)
+			t.ModelId = models.GetModelId(t.model)
+			t.ModelName = modelName
+			return nil
+		}
+	}
+
+	return fmt.Errorf("unsupported model: %s", modelName)
 }

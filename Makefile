@@ -1,3 +1,3 @@
 
-run: 
-	go run . run sonnet
+run:
+	DEBUG=1 go run . run sonnet

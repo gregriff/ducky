@@ -7,6 +7,8 @@ type LLM interface {
 	DoStreamPromptCompletion(prompt string, enableReasoning bool, ch chan string)
 	DoGetCostOfCurrentChat() float64
 	DoClearChatHistory()
+	DoGetChatHistory() []Message
+	DoGetModelId() string
 }
 
 // TODO: handle errors
@@ -20,6 +22,14 @@ func GetCostOfCurrentChat(llm LLM) float64 {
 
 func ClearChatHistory(llm LLM) {
 	llm.DoClearChatHistory()
+}
+
+func GetChatHistory(llm LLM) {
+	llm.DoGetChatHistory()
+}
+
+func GetModelId(llm LLM) string {
+	return llm.DoGetModelId()
 }
 
 // BaseLLM defines fields shared by all supported LLMs

@@ -1,6 +1,6 @@
 package models
 
-// BaseModelConfig defines properties that all supported LLMs have
+// BaseModelConfig defines fields that all supported LLMs have
 type BaseModelConfig struct {
 	Id           string  // defined by LLM provider API Spec
 	PromptCost   float64 // per million tokens

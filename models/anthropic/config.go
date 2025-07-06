@@ -45,8 +45,7 @@ func ValidateModelName(modelName string) error {
 		for name := range AnthropicModelConfigurations {
 			validNames = append(validNames, name)
 		}
-		return fmt.Errorf("invalid model name '%s'. Valid options: %s",
-			modelName, strings.Join(validNames, ", "))
+		return fmt.Errorf("invalid model name '%s'. Valid options: %s", modelName, strings.Join(validNames, ", "))
 	}
 	return nil
 }
