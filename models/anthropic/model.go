@@ -13,12 +13,13 @@ import (
 
 type AnthropicModel struct {
 	models.BaseLLM
-	Client      anthropic.Client
-	ModelConfig AnthropicModelConfig
+	Client             anthropic.Client
+	ModelConfig        AnthropicModelConfig
+	SystemPromptObject []anthropic.TextBlockParam
 	// TODO: add usage field
 }
 
-func NewAnthropicModel(systemPrompt string, maxTokens uint32, modelName string, pastMessages *[]models.Message) *AnthropicModel {
+func NewAnthropicModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message) *AnthropicModel {
 	// allow message history to persist when user changes model being used
 	var messages []models.Message
 	if pastMessages != nil {
@@ -34,18 +35,25 @@ func NewAnthropicModel(systemPrompt string, maxTokens uint32, modelName string, 
 			Messages:     messages,
 			PromptCount:  0, // TODO: ensure total usage cost is persisted between model changes
 		},
-		Client:      anthropic.NewClient(), // by default uses os.LookupEnv("ANTHROPIC_API_KEY") TODO: use viper config var
-		ModelConfig: AnthropicModelConfigurations[modelName],
+		Client:             anthropic.NewClient(), // by default uses os.LookupEnv("ANTHROPIC_API_KEY") TODO: use viper config var
+		ModelConfig:        AnthropicModelConfigurations[modelName],
+		SystemPromptObject: []anthropic.TextBlockParam{{Text: systemPrompt}},
 	}
 }
 
 func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReasoning bool, ch chan string) {
 	defer close(ch)
 
-	// create per-prompt properties (user will be able to change these at any time)
-	maxTokens := int64(llm.MaxTokens)
-	var thinking anthropic.ThinkingConfigParamUnion
-	if thinkingEnabled := llm.ModelConfig.Thinking; thinkingEnabled != nil && *thinkingEnabled && enableReasoning {
+	var (
+		// per-prompt properties (user will be able to change these at any time)
+		maxTokens       int64
+		thinking        anthropic.ThinkingConfigParamUnion
+		thinkingEnabled *bool
+	)
+
+	maxTokens = int64(llm.MaxTokens)
+	fullResponseText := ""
+	if thinkingEnabled = llm.ModelConfig.Thinking; thinkingEnabled != nil && *thinkingEnabled && enableReasoning {
 		thinking = anthropic.ThinkingConfigParamOfEnabled(maxTokens)
 		if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
 			maxTokens = 2048
@@ -57,16 +65,12 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 		thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
 	}
 
-	llm.Messages = append(llm.Messages, models.Message{Role: "user", Content: content})
 	stream := llm.Client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		// Model:     anthropic.ModelClaude3_7SonnetLatest,
 		Model:     anthropic.Model(llm.ModelConfig.Id),
-		System:    []anthropic.TextBlockParam{{Text: llm.SystemPrompt}},
+		System:    llm.SystemPromptObject,
 		MaxTokens: maxTokens,
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(content)),
-		},
-		Thinking: thinking,
+		Messages:  buildMessages(llm.Messages, content),
+		Thinking:  thinking,
 	})
 
 	message := anthropic.Message{}
@@ -74,7 +78,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 		event := stream.Current()
 		err := message.Accumulate(event)
 		if err != nil {
-			panic(err)
+			ch <- fmt.Sprintf("\n\n[Error: %v]", stream.Err())
 		}
 
 		switch eventVariant := event.AsAny().(type) {
@@ -83,6 +87,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 			case anthropic.ThinkingDelta:
 				ch <- deltaVariant.Thinking
 			case anthropic.TextDelta:
+				fullResponseText += deltaVariant.Text
 				ch <- deltaVariant.Text
 			case anthropic.CitationsDelta:
 				ch <- deltaVariant.Citation.DocumentTitle
@@ -91,20 +96,35 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 	}
 
 	if stream.Err() != nil {
-		panic(stream.Err())
+		ch <- fmt.Sprintf("\n\n[Error: %v]", stream.Err())
 	}
 
 	// update state
 	llm.PromptCount += 1
-	fullMessageChain := stream.Current().Message.Content
 
-	// TODO: figure out this block in order to preserve history
-	fmt.Println(fullMessageChain)
-	if len(fullMessageChain) > 0 {
-		fullResponse := fullMessageChain[len(fullMessageChain)-1]
-		fmt.Println(fullMessageChain[0])
-		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: fullResponse.Text})
+	if len(fullResponseText) > 0 {
+		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: fullResponseText})
 	}
+}
+
+// buildMessages takes the provider-agnostic []models.Message of the chat history and returns the Anthropic chat history data format
+func buildMessages(history []models.Message, newContent string) []anthropic.MessageParam {
+	messages := make([]anthropic.MessageParam, 0, len(history)+1)
+
+	// Add conversation history
+	for _, msg := range history {
+		switch msg.Role {
+		case "user":
+			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content)))
+		case "assistant":
+			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content)))
+		}
+	}
+
+	// Add current message
+	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(newContent)))
+
+	return messages
 }
 
 func (llm *AnthropicModel) DoGetCostOfCurrentChat() float64 {
@@ -115,4 +135,12 @@ func (llm *AnthropicModel) DoClearChatHistory() {
 	llm.PromptCount = 0
 	llm.Messages = []models.Message{}
 	// TODO: reset usage
+}
+
+func (llm *AnthropicModel) DoGetChatHistory() []models.Message {
+	return llm.Messages
+}
+
+func (llm *AnthropicModel) DoGetModelId() string {
+	return llm.ModelConfig.Id
 }

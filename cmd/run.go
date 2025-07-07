@@ -4,8 +4,8 @@ Copyright © 2025 Greg Griffin <greg.griffin2@gmail.com>
 package cmd
 
 import (
-	"github.com/gregriff/gpt-cli-go/client/repl"
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
+	"github.com/gregriff/gpt-cli-go/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -15,12 +15,12 @@ var modelName string
 var runCmd = &cobra.Command{
 	Use:   "run [model to prompt]",
 	Short: "Create a new prompt session with a model",
-	Long:  `Begin a prompt session with a specified model, creating a new server for convenience. Server will be shutdown on exit`,
+	Long:  `Begin a prompt session with a specified model.`,
 	// Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		return anthropic.ValidateModelName(modelName)
 	},
-	Run: runRepl,
+	Run: runTUI,
 }
 
 func init() {
@@ -38,8 +38,8 @@ func init() {
 	// runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-func runRepl(cmd *cobra.Command, args []string) {
+func runTUI(cmd *cobra.Command, args []string) {
 	systemPrompt := "You are a concise assistant to a software engineer"
-	repl := repl.NewREPL(systemPrompt, modelName, 2048)
-	repl.Start()
+	tui := tui.NewTUI(systemPrompt, modelName, 2048)
+	tui.Start()
 }
