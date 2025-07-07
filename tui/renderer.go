@@ -33,7 +33,8 @@ func NewRendererManager() *RendererManager {
 
 func (mgr *RendererManager) createRenderer(width int) *glamour.TermRenderer {
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		// glamour.WithAutoStyle(),  // this results in a hanging func call because of an ENOTTY
+		glamour.WithStylePath("dark"),
 		glamour.WithEmoji(),
 		glamour.WithWordWrap(width),
 	)
@@ -77,16 +78,20 @@ func (mgr *RendererManager) applyWidth(width int) {
 }
 
 // Render safely renders markdown with current renderer
-func (mgr *RendererManager) Render(markdown string) (string, error) {
+func (mgr *RendererManager) Render(markdown string) string {
 	mgr.mu.RLock()
 	defer mgr.mu.RUnlock()
 
 	renderer := mgr.renderer
 	if renderer == nil {
-		return markdown, nil // Fallback to raw markdown
+		return markdown
 	}
 
-	return renderer.Render(markdown)
+	output, err := renderer.Render(markdown)
+	if err != nil {
+		return markdown // Fallback to raw markdown
+	}
+	return output
 }
 
 // ForceCreation immediately creates a new Renderer with the specified width
@@ -99,5 +104,11 @@ func (mgr *RendererManager) ForceCreation(width int) {
 		mgr.resizeTimer = nil
 	}
 
-	mgr.applyWidth(width)
+	if mgr.currentWidth == width {
+		return // No change needed
+	}
+
+	// Create new renderer directly (don't call applyWidth to avoid deadlock)
+	mgr.renderer = mgr.createRenderer(width)
+	mgr.currentWidth = width
 }

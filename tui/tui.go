@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gregriff/gpt-cli-go/models"
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
-	"github.com/muesli/reflow/wordwrap"
 )
 
 // TODO: group some fields into sub-structs (rendererManager)
@@ -165,6 +164,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.viewport.Width = msg.Width
 			t.viewport.Height = msg.Height - verticalMarginHeight
 			t.renderMgr.SetWidth(msg.Width)
+			t.updateViewportContent()
 		}
 	}
 
@@ -267,14 +267,10 @@ func (t *TUI) addToChat(content string) {
 	t.chatHistory.WriteString(content)
 }
 
+// updateViewportContent renders the full chat history plus the current response in Markdown into the viewport
 func (t *TUI) updateViewportContent() {
 	fullContent := t.chatHistory.String() + t.currentResponse.String()
-	rendered, err := t.renderMgr.Render(fullContent)
-	if err != nil {
-		t.viewport.SetContent(wordwrap.String(fullContent, t.viewport.Width))
-	} else {
-		t.viewport.SetContent(wordwrap.String(rendered, t.viewport.Width))
-	}
+	t.viewport.SetContent(t.renderMgr.Render(fullContent))
 }
 
 func (t *TUI) View() string {
