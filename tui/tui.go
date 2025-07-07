@@ -32,7 +32,7 @@ type TUI struct {
 	currentResponse strings.Builder
 	responseChan    chan string
 	isStreaming     bool
-	renderMgr       *RendererManager
+	md              *MarkdownRenderer
 }
 
 // Bubbletea messages
@@ -50,9 +50,9 @@ func NewTUI(systemPrompt string, modelName string, maxTokens int) *TUI {
 		history: make([]string, 0),
 		vars:    make(map[string]string),
 
-		styles:       makeStyles(lipgloss.DefaultRenderer()),
+		styles:       makeStyles(),
+		md:           NewMarkdownRenderer(),
 		responseChan: make(chan string),
-		renderMgr:    NewRendererManager(),
 	}
 
 	tui.initLLMClient(modelName)
@@ -73,8 +73,14 @@ func (t *TUI) Start() {
 	}
 }
 
+// Init performs initial IO.
 func (t *TUI) Init() tea.Cmd {
-	return tea.SetWindowTitle("GPT-CLI")
+	initMarkdownRenderer := func() tea.Msg {
+		t.md.SetWidthImmediate(0)
+		return nil
+	}
+	return tea.Batch(initMarkdownRenderer, tea.SetWindowTitle("GPT-CLI"))
+	// return tea.SetWindowTitle("GPT-CLI")
 }
 
 func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -156,14 +162,14 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			t.viewport.YPosition = headerHeight
 			t.viewport.MouseWheelDelta = 1
-			t.renderMgr.ForceCreation(msg.Width)
+			t.md.SetWidthImmediate(msg.Width)
 			t.updateViewportContent()
 			t.viewport.GotoBottom()
 			t.ready = true
 		} else {
 			t.viewport.Width = msg.Width
 			t.viewport.Height = msg.Height - verticalMarginHeight
-			t.renderMgr.SetWidth(msg.Width)
+			t.md.SetWidth(msg.Width)
 			t.updateViewportContent()
 		}
 	}
@@ -270,7 +276,7 @@ func (t *TUI) addToChat(content string) {
 // updateViewportContent renders the full chat history plus the current response in Markdown into the viewport
 func (t *TUI) updateViewportContent() {
 	fullContent := t.chatHistory.String() + t.currentResponse.String()
-	t.viewport.SetContent(t.renderMgr.Render(fullContent))
+	t.viewport.SetContent(t.md.Render(fullContent))
 }
 
 func (t *TUI) View() string {

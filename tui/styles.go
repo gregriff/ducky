@@ -11,15 +11,16 @@ type Styles struct {
 
 const H_PADDING int = 1
 
-func makeStyles(r *lipgloss.Renderer) (s Styles) {
-	s.TitleBar = r.NewStyle().
+// makeStyles declares formatting for text throughout the TUI
+func makeStyles() (s Styles) {
+	s.TitleBar = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("86")).
 		Faint(true).
 		Bold(true).
 		BorderStyle(lipgloss.RoundedBorder()).
 		Padding(0, H_PADDING)
 
-	s.InputArea = r.NewStyle().
+	s.InputArea = lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderTop(true).
 		Padding(0, H_PADDING)
