@@ -12,7 +12,7 @@ import (
 // MarkdownRenderer wraps glamour.TermRenderer and handles Markdown rendering
 // as well as resizing the renderable area of the screen.
 type MarkdownRenderer struct {
-	mu       sync.RWMutex
+	mtx      sync.RWMutex
 	renderer *glamour.TermRenderer
 
 	currentWidth   int
@@ -31,8 +31,8 @@ func NewMarkdownRenderer() *MarkdownRenderer {
 // Render safely renders Markdown
 func (md *MarkdownRenderer) Render(markdown string) string {
 	// this func could be called while a window resize is happening, so we lock
-	md.mu.RLock()
-	defer md.mu.RUnlock()
+	md.mtx.RLock()
+	defer md.mtx.RUnlock()
 
 	renderer := md.renderer
 	if renderer == nil {
@@ -48,8 +48,8 @@ func (md *MarkdownRenderer) Render(markdown string) string {
 
 // SetWidth resizes the renderable area of the screen. Designed to handle frequent resize events by debouncing
 func (md *MarkdownRenderer) SetWidth(width int) {
-	md.mu.Lock()
-	defer md.mu.Unlock()
+	md.mtx.Lock()
+	defer md.mtx.Unlock()
 
 	md.pendingWidth = width
 
@@ -66,8 +66,8 @@ func (md *MarkdownRenderer) SetWidth(width int) {
 
 // SetWidthImmediate immediately resizes the renderable area of the screen
 func (md *MarkdownRenderer) SetWidthImmediate(width int) {
-	md.mu.Lock()
-	defer md.mu.Unlock()
+	md.mtx.Lock()
+	defer md.mtx.Unlock()
 
 	if md.resizeTimer != nil {
 		md.resizeTimer.Stop()
@@ -79,8 +79,8 @@ func (md *MarkdownRenderer) SetWidthImmediate(width int) {
 
 // applyWidth resizes the renderable area of the screen. Designed to be called by a delayed function
 func (md *MarkdownRenderer) applyWidth(width int) {
-	md.mu.Lock()
-	defer md.mu.Unlock()
+	md.mtx.Lock()
+	defer md.mtx.Unlock()
 	md.createRenderer(width)
 }
 

@@ -9,7 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var modelName string
+var (
+	modelName       string
+	enableReasoning bool
+)
 
 // runCmd represents the run command
 var runCmd = &cobra.Command{
@@ -32,6 +35,7 @@ func init() {
 	// and all subcommands, e.g.:
 	// runCmd.PersistentFlags().String("foo", "", "A help for foo")
 	rootCmd.PersistentFlags().StringVarP(&modelName, "model", "m", "sonnet", "model to use")
+	rootCmd.PersistentFlags().BoolVarP(&enableReasoning, "reasoning", "r", true, "enable reasoning/thinking for supported models")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
@@ -40,6 +44,6 @@ func init() {
 
 func runTUI(cmd *cobra.Command, args []string) {
 	systemPrompt := "You are a concise assistant to a software engineer"
-	tui := tui.NewTUI(systemPrompt, modelName, 2048)
+	tui := tui.NewTUI(systemPrompt, modelName, enableReasoning, 2048)
 	tui.Start()
 }

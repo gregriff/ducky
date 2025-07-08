@@ -13,46 +13,49 @@ import (
 
 // TODO: group some fields into sub-structs (rendererManager)
 type TUI struct {
-	model        models.LLM
-	ModelId      string
-	SystemPrompt string
-	ModelName    string
-	TotalCost    float64
-	MaxTokens    int
+	model           models.LLM
+	systemPrompt    string
+	totalCost       float64
+	maxTokens       int
+	enableReasoning bool
 
 	history []string
 	vars    map[string]string
 
 	// UI state
-	styles          Styles
-	ready           bool
-	viewport        viewport.Model
+	ready    bool
+	viewport viewport.Model
+
+	// Chat state
 	input           string
+	isStreaming     bool
+	isReasoning     bool
 	chatHistory     strings.Builder
 	currentResponse strings.Builder
-	responseChan    chan string
-	isStreaming     bool
-	md              *MarkdownRenderer
+	responseChan    chan models.StreamChunk
+
+	// Helpers
+	md     *MarkdownRenderer
+	styles Styles
 }
 
 // Bubbletea messages
-type streamChunk string
 type streamComplete struct{}
 type streamError struct{ err error }
 
-func NewTUI(systemPrompt string, modelName string, maxTokens int) *TUI {
+func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int) *TUI {
 	tui := &TUI{
-		SystemPrompt: systemPrompt,
-		ModelName:    modelName,
-		TotalCost:    0.,
-		MaxTokens:    maxTokens,
+		systemPrompt: systemPrompt,
+		// totalCost:      0.,
+		maxTokens:       maxTokens,
+		enableReasoning: enableReasoning,
 
 		history: make([]string, 0),
 		vars:    make(map[string]string),
 
 		styles:       makeStyles(),
 		md:           NewMarkdownRenderer(),
-		responseChan: make(chan string),
+		responseChan: make(chan models.StreamChunk),
 	}
 
 	tui.initLLMClient(modelName)
@@ -80,7 +83,6 @@ func (t *TUI) Init() tea.Cmd {
 		return nil
 	}
 	return tea.Batch(initMarkdownRenderer, tea.SetWindowTitle("GPT-CLI"))
-	// return tea.SetWindowTitle("GPT-CLI")
 }
 
 func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -131,12 +133,22 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return t, nil
 		}
 
-	case streamChunk:
-		t.currentResponse.WriteString(string(msg))
+	case models.StreamChunk:
+		if t.isReasoning && !msg.Reasoning {
+			t.isReasoning = false
+
+			// this will catch if the model did not support reasoning
+			if t.currentResponse.Len() > 0 {
+				// NOTE: the number of newlines surrounding a block of text will style it differently.
+				t.currentResponse.WriteString("\n\n---\n")
+			}
+		}
+		t.currentResponse.WriteString(string(msg.Content))
 		t.updateViewportContent()
 		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
-		return t, waitForNextChunk(t.responseChan)
+		return t, t.waitForNextChunk()
 
+	// TODO: include usage data?
 	case streamComplete:
 		t.isStreaming = false
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
@@ -144,10 +156,12 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.addToChat(t.currentResponse.String() + "\n\n---\n\n")
 		t.currentResponse.Reset()
 		t.updateViewportContent()
+		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
 		return t, nil
 
 	case streamError:
 		t.isStreaming = false
+		t.isReasoning = false
 		t.addToChat(t.currentResponse.String() + "\n\n---\n\n" + fmt.Sprintf("**Error:** %v\n\n---\n\n", msg.err))
 		t.currentResponse.Reset()
 		t.updateViewportContent()
@@ -211,58 +225,39 @@ func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
 	}
 
 	// Start LLM streaming
-	t.responseChan = make(chan string)
+	t.responseChan = make(chan models.StreamChunk)
+	prompt := input
 	t.isStreaming = true
+	if t.enableReasoning {
+		t.isReasoning = true
+	}
+
 	t.addToChat("**Assistant:** ")
 	t.updateViewportContent()
 	t.viewport.GotoBottom()
 
 	return t, tea.Batch(
 		// m.spinner.Tick,
-		t.streamLLMResponse(input, t.responseChan),
-		waitForNextChunk(t.responseChan),
+		t.streamLLMResponse(prompt, t.enableReasoning),
+		t.waitForNextChunk(),
 	)
 }
 
-func (t *TUI) handleCommand(input string) (string, bool) {
-	parts := strings.Fields(input)
-	if len(parts) == 0 || !strings.HasPrefix(parts[0], ":") {
-		return "", false
-	}
-
-	command := parts[0]
-	switch command {
-	case ":set":
-		return t.handleSet(parts), true
-	case ":get":
-		return t.handleGet(parts), true
-	case ":history":
-		return t.showHistory(), true
-	case ":clear":
-		t.history = t.history[:0]
-		t.chatHistory.Reset()
-		t.addToChat("\nHistory cleared.\n\n---\n\n")
-		return "", true
-	case ":vars":
-		return t.showVars(), true
-	default:
-		return "Unknown command", true
-	}
-}
-
-func (t *TUI) streamLLMResponse(input string, ch chan string) tea.Cmd {
+// streamLLMResponse sends an API request to get a response from an LLM and sends chunked updates to the two channels
+func (t *TUI) streamLLMResponse(prompt string, enableReasoning bool) tea.Cmd {
 	// the below runs in a goroutine. It will immediately return, and our Update func has already queued a waitForNextChunk to
 	// receive on the responseChannel
 	return func() tea.Msg {
-		models.StreamPromptCompletion(t.model, input, true, ch)
-		return nil
+		models.StreamPromptCompletion(t.model, prompt, enableReasoning, t.responseChan)
+		return nil // should this return streamComplete?
 	}
 }
 
-func waitForNextChunk(ch chan string) tea.Cmd {
+// waitForNextChunk notifies the Update function when a response chunk arrives, and also when the response is completed.
+func (t *TUI) waitForNextChunk() tea.Cmd {
 	return func() tea.Msg {
-		if chunk, ok := <-ch; ok {
-			return streamChunk(chunk)
+		if chunk, ok := <-t.responseChan; ok {
+			return chunk
 		} else {
 			return streamComplete{}
 		}
@@ -281,7 +276,7 @@ func (t *TUI) updateViewportContent() {
 
 func (t *TUI) View() string {
 	if !t.ready {
-		return "\n  Initializing..."
+		return "Initializing..."
 	}
 
 	return fmt.Sprintf("%s\n%s\n%s", t.headerView(), t.viewport.View(), t.inputView())
@@ -342,9 +337,7 @@ func (t *TUI) initLLMClient(modelName string) error {
 	for _, provider := range providers {
 		if err := provider.validateFunc(modelName); err == nil {
 			// does not return an error, should it? Also, any cleanup we need to do?
-			t.model = provider.newModelFunc(t.SystemPrompt, t.MaxTokens, modelName, nil)
-			t.ModelId = models.GetModelId(t.model)
-			t.ModelName = modelName
+			t.model = provider.newModelFunc(t.systemPrompt, t.maxTokens, modelName, nil)
 			return nil
 		}
 	}
