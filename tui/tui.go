@@ -19,9 +19,6 @@ type TUI struct {
 	maxTokens       int
 	enableReasoning bool
 
-	history []string
-	vars    map[string]string
-
 	// UI state
 	ready    bool
 	viewport viewport.Model
@@ -30,8 +27,9 @@ type TUI struct {
 	input           string
 	isStreaming     bool
 	isReasoning     bool
-	chatHistory     strings.Builder
 	currentResponse strings.Builder
+	chatHistory     strings.Builder // formatted prompts+responses
+	promptHistory   []string        // unformatted user prompts
 	responseChan    chan models.StreamChunk
 
 	// Helpers
@@ -50,8 +48,7 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
 
-		history: make([]string, 0),
-		vars:    make(map[string]string),
+		promptHistory: make([]string, 0),
 
 		styles:       makeStyles(),
 		md:           NewMarkdownRenderer(),
@@ -61,7 +58,7 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 	tui.initLLMClient(modelName)
 
 	// Add welcome message to chat history
-	tui.addToChat("\nCommands: `:set <var> <value>`, `:get <var>`, `:history`, `:clear`, `:exit`\n\n---\n\n")
+	tui.addToChat("\nCommands: `:history`, `:clear`, `:exit`\n\n---\n\n")
 
 	return tui
 }
@@ -197,22 +194,15 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
 	input := strings.TrimSpace(t.input)
-	userInput := t.input
 	t.input = ""
 
 	if input == "" {
 		return t, nil
 	}
 
-	// Add user input to chat
-	t.addToChat(fmt.Sprintf("**You:** %s\n\n", userInput))
-
 	if input == ":exit" || input == ":quit" {
 		return t, tea.Quit
 	}
-
-	// Add to history
-	t.history = append(t.history, input)
 
 	// Process commands
 	if result, isCommand := t.handleCommand(input); isCommand {
@@ -225,32 +215,31 @@ func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
 	}
 
 	// Start LLM streaming
+	return t.promptLLM(input)
+}
+
+// promptLLM makes the LLM API request, handles TUI state and begins listening for the response stream
+func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
+	t.addToChat(fmt.Sprintf("%s\n\n", prompt))
+	t.promptHistory = append(t.promptHistory, prompt)
+
 	t.responseChan = make(chan models.StreamChunk)
-	prompt := input
 	t.isStreaming = true
 	if t.enableReasoning {
 		t.isReasoning = true
 	}
 
-	t.addToChat("**Assistant:** ")
 	t.updateViewportContent()
 	t.viewport.GotoBottom()
 
 	return t, tea.Batch(
 		// m.spinner.Tick,
-		t.streamLLMResponse(prompt, t.enableReasoning),
+		func() tea.Msg {
+			models.StreamPromptCompletion(t.model, prompt, t.enableReasoning, t.responseChan)
+			return nil
+		},
 		t.waitForNextChunk(),
 	)
-}
-
-// streamLLMResponse sends an API request to get a response from an LLM and sends chunked updates to the two channels
-func (t *TUI) streamLLMResponse(prompt string, enableReasoning bool) tea.Cmd {
-	// the below runs in a goroutine. It will immediately return, and our Update func has already queued a waitForNextChunk to
-	// receive on the responseChannel
-	return func() tea.Msg {
-		models.StreamPromptCompletion(t.model, prompt, enableReasoning, t.responseChan)
-		return nil // should this return streamComplete?
-	}
 }
 
 // waitForNextChunk notifies the Update function when a response chunk arrives, and also when the response is completed.

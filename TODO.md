@@ -2,6 +2,7 @@
 - n/A
 
 ## Additional Features:
+- figure out why haiku wont work
 - debounce scroll/slow it
 - fix debounced markdown renderer resizing
 - color sections

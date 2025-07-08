@@ -11,6 +11,7 @@ import (
 	"github.com/gregriff/gpt-cli-go/models"
 )
 
+// AnthropicModel satisfies the models.LLM interface
 type AnthropicModel struct {
 	models.BaseLLM
 	Client             anthropic.Client
