@@ -6,6 +6,25 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+type CurrentResponse struct {
+	reasoningContent strings.Builder
+	responseContent  strings.Builder
+	errorContent     string
+}
+
+// isEmpty returns true if there is any text content or an error in the current response
+func (res *CurrentResponse) isEmpty() bool {
+	if res.Len() > 0 || len(res.errorContent) > 0 {
+		return false
+	}
+	return true
+}
+
+// Len returns the total byte count of the resoning and response parts of the current response
+func (res *CurrentResponse) Len() int {
+	return res.reasoningContent.Len() + res.responseContent.Len()
+}
+
 // ChatHistory stores the state of the current chat with the LLM and formats prompts/responses
 // TODO: use a proper ChatEntry struct array for the related string arrays
 type ChatHistory struct {
@@ -20,16 +39,16 @@ type ChatHistory struct {
 	chatBuilder strings.Builder
 
 	TotalCost float64
-	styles    Styles
+	styles    *Styles
 }
 
-func NewChatHistory() *ChatHistory {
+func NewChatHistory(styles Styles) *ChatHistory {
 	const cap = 10
 	return &ChatHistory{
 		Prompts:    make([]string, 0, cap),
 		rawPrompts: make([]string, 0, cap),
 		Responses:  make([]string, 0, cap),
-		styles:     makeStyles(),
+		styles:     &styles,
 	}
 }
 

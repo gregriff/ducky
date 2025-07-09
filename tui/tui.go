@@ -12,8 +12,9 @@ import (
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
 )
 
-// TODO: group some fields into sub-structs (rendererManager)
 type TUI struct {
+	styles *Styles
+
 	model           models.LLM
 	systemPrompt    string
 	totalCost       float64
@@ -30,47 +31,29 @@ type TUI struct {
 	isReasoning bool
 
 	currentResponse CurrentResponse
-	history         ChatHistory
+	history         *ChatHistory
 	responseChan    chan models.StreamChunk
 
 	// Helpers
-	md     *MarkdownRenderer
-	styles Styles
-}
-
-type CurrentResponse struct {
-	reasoningContent strings.Builder
-	responseContent  strings.Builder
-	errorContent     string
-}
-
-// isEmpty returns true if there is any text content or an error in the current response
-func (res *CurrentResponse) isEmpty() bool {
-	if res.Len() > 0 || len(res.errorContent) > 0 {
-		return false
-	}
-	return true
-}
-
-// Len returns the total byte count of the resoning and response parts of the current response
-func (res *CurrentResponse) Len() int {
-	return res.reasoningContent.Len() + res.responseContent.Len()
+	md *MarkdownRenderer
 }
 
 // Bubbletea messages
 type streamComplete struct{}
 
 func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int) *TUI {
+	styles := makeStyles()
 	tui := &TUI{
+		styles: &styles,
+
 		systemPrompt:    systemPrompt,
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
 
-		history:      *NewChatHistory(),
+		history:      NewChatHistory(styles),
 		responseChan: make(chan models.StreamChunk),
 
-		md:     NewMarkdownRenderer(),
-		styles: makeStyles(),
+		md: NewMarkdownRenderer(),
 	}
 
 	tui.initLLMClient(modelName)
@@ -300,13 +283,7 @@ func (t *TUI) headerView() string {
 }
 
 func (t *TUI) inputView() string {
-	var prompt string
-	if t.isStreaming {
-		prompt = "Streaming response..."
-	} else {
-		prompt = fmt.Sprintf(" > %s", t.input)
-	}
-
+	prompt := fmt.Sprintf(" > %s", t.input)
 	return t.styles.InputArea.Render(prompt)
 }
 
