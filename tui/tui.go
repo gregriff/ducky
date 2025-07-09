@@ -10,10 +10,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gregriff/gpt-cli-go/models"
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
+	chat "github.com/gregriff/gpt-cli-go/tui/chat"
+	styles "github.com/gregriff/gpt-cli-go/tui/styles"
 )
 
 type TUI struct {
-	styles *Styles
+	styles *styles.TUIStylesStruct
 
 	model           models.LLM
 	systemPrompt    string
@@ -30,34 +32,32 @@ type TUI struct {
 	isStreaming bool
 	isReasoning bool
 
-	currentResponse CurrentResponse
-	history         *ChatHistory
-	responseChan    chan models.StreamChunk
+	history      *chat.ChatHistory
+	responseChan chan models.StreamChunk
 
 	// Helpers
-	md *MarkdownRenderer
+	md *chat.MarkdownRenderer
 }
 
 // Bubbletea messages
 type streamComplete struct{}
 
 func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int) *TUI {
-	styles := makeStyles()
-	tui := &TUI{
-		styles: &styles,
+	t := &TUI{
+		styles: &styles.TUIStyles,
 
 		systemPrompt:    systemPrompt,
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
 
-		history:      NewChatHistory(styles),
+		history:      chat.NewChatHistory(),
 		responseChan: make(chan models.StreamChunk),
 
-		md: NewMarkdownRenderer(),
+		md: chat.NewMarkdownRenderer(),
 	}
 
-	tui.initLLMClient(modelName)
-	return tui
+	t.initLLMClient(modelName)
+	return t
 }
 
 func (t *TUI) Start() {
@@ -133,12 +133,12 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if t.isReasoning {
 			if !msg.Reasoning {
 				t.isReasoning = false
-				t.currentResponse.responseContent.WriteString(text)
+				t.history.CurrentResponse.ResponseContent.WriteString(text)
 			} else {
-				t.currentResponse.reasoningContent.WriteString(text)
+				t.history.CurrentResponse.ReasoningContent.WriteString(text)
 			}
 		} else {
-			t.currentResponse.responseContent.WriteString(text)
+			t.history.CurrentResponse.ResponseContent.WriteString(text)
 		}
 		t.renderChat()
 		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
@@ -150,14 +150,14 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.isReasoning = false
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
-		t.history.AddResponse(&t.currentResponse)
+		t.history.AddResponse()
 		t.renderChat()
 		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
 		return t, nil
 
 	case models.StreamError:
 		log.Println("error event hit")
-		t.currentResponse.errorContent = fmt.Sprintf("**Error:** %v\n\n---\n\n", msg.ErrMsg)
+		t.history.CurrentResponse.ErrorContent = fmt.Sprintf("**Error:** %v\n\n---\n\n", msg.ErrMsg)
 		return t, t.waitForNextChunk() // ensure last chunk is read and let chunk and complete messages handle state
 
 	case tea.WindowSizeMsg:
@@ -253,7 +253,7 @@ func (t *TUI) waitForNextChunk() tea.Cmd {
 // renderChat renders the full chat history plus the current response in Markdown into the viewport
 func (t *TUI) renderChat() {
 	// TODO optimizations: impl an intersection system to only t.md.Render text that is within the viewport?
-	fullChat := t.history.BuildChatString(t.md, &t.currentResponse)
+	fullChat := t.history.BuildChatString(t.md)
 	t.viewport.SetContent(fullChat)
 }
 
@@ -267,7 +267,7 @@ func (t *TUI) View() string {
 
 func (t *TUI) headerView() string {
 	// TODO: my alacritty term is cropping the term window so i need this
-	const R_PADDING int = H_PADDING * 2
+	const R_PADDING int = styles.H_PADDING * 2
 
 	leftText := "GPT-CLI"
 	rightText := models.GetModelId(t.model)

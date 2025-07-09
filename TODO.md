@@ -2,6 +2,7 @@
 - n/A
 
 ## Additional Features:
+- scroll to top of current prompt upon clicking enter to send the prompt
 - figure out why haiku wont work
 - debounce scroll/slow it
 - fix debounced markdown renderer resizing

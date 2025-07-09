@@ -4,17 +4,18 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	styles "github.com/gregriff/gpt-cli-go/tui/styles"
 )
 
 type CurrentResponse struct {
-	reasoningContent strings.Builder
-	responseContent  strings.Builder
-	errorContent     string
+	ReasoningContent strings.Builder
+	ResponseContent  strings.Builder
+	ErrorContent     string
 }
 
 // isEmpty returns true if there is any text content or an error in the current response
 func (res *CurrentResponse) isEmpty() bool {
-	if res.Len() > 0 || len(res.errorContent) > 0 {
+	if res.Len() > 0 || len(res.ErrorContent) > 0 {
 		return false
 	}
 	return true
@@ -22,61 +23,68 @@ func (res *CurrentResponse) isEmpty() bool {
 
 // Len returns the total byte count of the resoning and response parts of the current response
 func (res *CurrentResponse) Len() int {
-	return res.reasoningContent.Len() + res.responseContent.Len()
+	return res.ReasoningContent.Len() + res.ResponseContent.Len()
 }
 
 // ChatHistory stores the state of the current chat with the LLM and formats prompts/responses
 // TODO: use a proper ChatEntry struct array for the related string arrays
 type ChatHistory struct {
-	Prompts []string // ansi formatted for rendering
+	styles *styles.ChatStylesStruct
 
-	// unformatted for storage (but still valid Markdown)
+	CurrentResponse *CurrentResponse
+	Prompts         []string // ansi formatted for rendering
+
+	// unformatted for storage (but still valid Markdown) TODO: make these private
 	Responses          []string // Markdown renderer handles ANSI formatting for these
 	ReasoningResponses []string
-	rawPrompts         []string
+	RawPrompts         []string
 	Errors             []string
 
 	chatBuilder strings.Builder
 
 	TotalCost float64
-	styles    *Styles
 }
 
-func NewChatHistory(styles Styles) *ChatHistory {
+func NewChatHistory() *ChatHistory {
 	const cap = 10
 	return &ChatHistory{
-		Prompts:    make([]string, 0, cap),
-		rawPrompts: make([]string, 0, cap),
-		Responses:  make([]string, 0, cap),
-		styles:     &styles,
+		styles: &styles.ChatStyles,
+
+		CurrentResponse: &CurrentResponse{},
+		Prompts:         make([]string, 0, cap),
+		RawPrompts:      make([]string, 0, cap),
+		Responses:       make([]string, 0, cap),
 	}
 }
 
 // AddPrompt persists a formatted and unformatted prompt string to memory given the current viewport width
 func (h *ChatHistory) AddPrompt(s string, width int) {
-	h.rawPrompts = append(h.rawPrompts, s)
+	h.RawPrompts = append(h.RawPrompts, s)
 	style := lipgloss.NewStyle().Inherit(h.styles.PromptText).Width(width)
 	styledPrompt := applyPromptPadding(s, style, width)
 	h.Prompts = append(h.Prompts, styledPrompt)
 }
 
 // AddResponse persists an unformatted response string to memory and updates related state
-func (h *ChatHistory) AddResponse(s *CurrentResponse) {
-	h.ReasoningResponses = append(h.ReasoningResponses, s.reasoningContent.String())
-	h.Responses = append(h.Responses, s.responseContent.String())
-	h.Errors = append(h.Errors, s.errorContent)
-	s.reasoningContent.Reset()
-	s.responseContent.Reset()
-	s.errorContent = ""
+func (h *ChatHistory) AddResponse() {
+	s := h.CurrentResponse
+
+	h.ReasoningResponses = append(h.ReasoningResponses, s.ReasoningContent.String())
+	h.Responses = append(h.Responses, s.ResponseContent.String())
+	h.Errors = append(h.Errors, s.ErrorContent)
+	s.ReasoningContent.Reset()
+	s.ResponseContent.Reset()
+	s.ErrorContent = ""
 }
 
 // BuildChatString builds and returns a string of the entire chat history for rendering in the viewport
-func (h *ChatHistory) BuildChatString(markdownRenderer *MarkdownRenderer, currentResponse *CurrentResponse) string {
+func (h *ChatHistory) BuildChatString(markdownRenderer *MarkdownRenderer) string {
 	// TODO: this runs every time a re-render happens so it is slower than the original approach
 	// of keeping the chat history in a stringbuilder. We could still do that in this struct
 
 	// TODO: only reset if width has changed (pass a width) and keep a copy of the chatBuilder without the currentResponse
 	// so that we can just rerender the markdown of the current response and append that to the builder and then return that string
+
 	defer h.chatBuilder.Reset()
 	if len(h.Prompts) == 0 {
 		return ""
@@ -90,7 +98,7 @@ func (h *ChatHistory) BuildChatString(markdownRenderer *MarkdownRenderer, curren
 		totalSize += len(h.Prompts[i]) + len(h.ReasoningResponses[i]) + len(h.Responses[i])
 	}
 
-	totalSize += currentResponse.Len()
+	totalSize += h.CurrentResponse.Len()
 	totalSize = int(float64(totalSize) * 1.4) // assuming markdown ansi will add max 40% more bytes
 	h.chatBuilder.Grow(totalSize)
 
@@ -118,20 +126,20 @@ func (h *ChatHistory) BuildChatString(markdownRenderer *MarkdownRenderer, curren
 		h.chatBuilder.WriteString(h.Prompts[minLen])
 
 		// TODO: cant render reasoning or error sections if empty because of lipgloss formatting
-		if !currentResponse.isEmpty() {
-			reasoningMarkdown := markdownRenderer.Render(currentResponse.reasoningContent.String())
+		if !h.CurrentResponse.isEmpty() {
+			reasoningMarkdown := markdownRenderer.Render(h.CurrentResponse.ReasoningContent.String())
 			reasoningFormatted := h.styles.ReasoningText.Render(reasoningMarkdown)
 			// reasoningFormatted := h.styles.ReasoningText.Render(currentResponse.reasoningContent.String())
 			h.chatBuilder.WriteString(reasoningFormatted)
 
-			if len(currentResponse.responseContent.String()) > 0 {
+			if len(h.CurrentResponse.ResponseContent.String()) > 0 {
 				h.chatBuilder.WriteString(markdownRenderer.Render("\n---\n"))
 			}
 
-			h.chatBuilder.WriteString(markdownRenderer.Render(currentResponse.responseContent.String()))
+			h.chatBuilder.WriteString(markdownRenderer.Render(h.CurrentResponse.ResponseContent.String()))
 
-			if len(currentResponse.errorContent) > 0 {
-				errorFormatted := h.styles.ErrorText.Render(currentResponse.errorContent)
+			if len(h.CurrentResponse.ErrorContent) > 0 {
+				errorFormatted := h.styles.ErrorText.Render(h.CurrentResponse.ErrorContent)
 				h.chatBuilder.WriteString(errorFormatted)
 			}
 		}
@@ -141,7 +149,7 @@ func (h *ChatHistory) BuildChatString(markdownRenderer *MarkdownRenderer, curren
 
 func (h *ChatHistory) Clear() {
 	// TODO: save unsaved history in temporary sqlite DB or in-memory for accidental clears
-	h.rawPrompts = h.rawPrompts[:0]
+	h.RawPrompts = h.RawPrompts[:0]
 	h.Prompts = h.Prompts[:0]
 	h.ReasoningResponses = h.ReasoningResponses[:0]
 	h.Responses = h.Responses[:0]
@@ -153,15 +161,15 @@ func (h *ChatHistory) Clear() {
 func (h *ChatHistory) ResizePrompts(width int) {
 	style := lipgloss.NewStyle().Inherit(h.styles.PromptText).Width(width)
 
-	for i, prompt := range h.rawPrompts {
+	for i, prompt := range h.RawPrompts {
 		h.Prompts[i] = applyPromptPadding(prompt, style, width)
 	}
 }
 
 func applyPromptPadding(prompt string, style lipgloss.Style, width int) string {
 	fullStyle := style.
-		PaddingLeft(width - lipgloss.Width(prompt) - H_PADDING*2).
-		PaddingTop(PROMPT_V_PADDING).
-		PaddingBottom(PROMPT_V_PADDING)
+		PaddingLeft(width - lipgloss.Width(prompt) - styles.H_PADDING*2).
+		PaddingTop(styles.PROMPT_V_PADDING).
+		PaddingBottom(styles.PROMPT_V_PADDING)
 	return fullStyle.Render(prompt)
 }

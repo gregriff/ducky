@@ -30,12 +30,12 @@ func (t *TUI) handleCommand(input string) (string, bool) {
 }
 
 func (t *TUI) showHistory() string {
-	if len(t.history.rawPrompts) == 0 {
+	if len(t.history.RawPrompts) == 0 {
 		return "No history"
 	}
 
 	var result strings.Builder
-	for i, cmd := range t.history.rawPrompts {
+	for i, cmd := range t.history.RawPrompts {
 		result.WriteString(fmt.Sprintf("%d: %s\n", i+1, cmd))
 	}
 
