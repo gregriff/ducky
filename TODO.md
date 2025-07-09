@@ -5,10 +5,10 @@
 - figure out why haiku wont work
 - debounce scroll/slow it
 - fix debounced markdown renderer resizing
-- color sections
 - make chat history look like imessage or at least align it as such
 - add thinking, first response blinkers
 - add textbox component
+- make custom glamour stylesheet to render the centered H2s
 - move commands section
 - fully impl ability to switch models mid-session with a command, keeping history
 - impl openAI models

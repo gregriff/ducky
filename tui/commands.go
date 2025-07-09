@@ -21,7 +21,7 @@ func (t *TUI) handleCommand(input string) (string, bool) {
 		return t.showHistory(), true
 	case ":clear":
 		t.history.Clear()
-		// t.addToChat("\nHistory cleared.\n\n---\n\n")  // TODO: render this somewhere
+		// TODO: render a message somewhere
 		return "", true
 	default:
 		// TODO: render this somewhere else

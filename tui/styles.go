@@ -6,8 +6,8 @@ type Styles struct {
 	TitleBar,
 	InputArea,
 	PromptText,
-
-	userText lipgloss.Style
+	ReasoningText,
+	ErrorText lipgloss.Style
 }
 
 const H_PADDING int = 1
@@ -29,5 +29,16 @@ func makeStyles() (s Styles) {
 
 	s.PromptText = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#32cd32"))
+
+	s.ReasoningText = lipgloss.NewStyle().
+		// Foreground(lipgloss.Color("#a9a9a9")).
+		Foreground(lipgloss.Color("#32cd32")).
+		// Faint(true).
+		PaddingLeft(H_PADDING)
+
+	s.ErrorText = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#ff0000")).
+		PaddingBottom(PROMPT_V_PADDING).
+		PaddingTop(PROMPT_V_PADDING)
 	return s
 }

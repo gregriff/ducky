@@ -5,7 +5,6 @@ package anthropic
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go" // imported as anthropic
 	"github.com/gregriff/gpt-cli-go/models"
@@ -42,7 +41,7 @@ func NewAnthropicModel(systemPrompt string, maxTokens int, modelName string, pas
 	}
 }
 
-func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinking bool, responseChan chan models.StreamChunk) {
+func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinking bool, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
@@ -79,7 +78,10 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 		event := stream.Current()
 		err := message.Accumulate(event)
 		if err != nil {
-			responseChan <- models.StreamChunk{Reasoning: false, Content: fmt.Sprintf("\n\n[Error: %v]", stream.Err())}
+			// responseChan <- models.StreamChunk{Reasoning: false, Content: fmt.Sprintf("\n\n[Error: %v]", stream.Err())}
+
+			// TODO: format anthropic error message here
+			return models.StreamError{ErrMsg: stream.Err().Error()}
 		}
 
 		switch eventVariant := event.AsAny().(type) {
@@ -99,7 +101,8 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 	}
 
 	if stream.Err() != nil {
-		responseChan <- models.StreamChunk{Reasoning: false, Content: fmt.Sprintf("\n\n[Error: %v]", stream.Err())}
+		// responseChan <- models.StreamChunk{Reasoning: false, Content: fmt.Sprintf("\n\n[Error: %v]", stream.Err())}
+		return models.StreamError{ErrMsg: stream.Err().Error()}
 	}
 
 	// update state
@@ -108,6 +111,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 	if len(fullResponseText) > 0 {
 		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: fullResponseText})
 	}
+	return nil
 }
 
 // buildMessages takes the provider-agnostic []models.Message of the chat history and returns the Anthropic chat history data format

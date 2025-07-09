@@ -8,7 +8,7 @@ type LLM interface {
 		prompt string,
 		enableReasoning bool, // whether the user wants the model to think/reason if supported
 		responseChan chan StreamChunk,
-	)
+	) error
 	DoGetCostOfCurrentChat() float64
 	DoClearChatHistory()
 	DoGetChatHistory() []Message
@@ -16,8 +16,8 @@ type LLM interface {
 }
 
 // TODO: handle errors
-func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, responseChan chan StreamChunk) {
-	llm.DoStreamPromptCompletion(prompt, enableReasoning, responseChan)
+func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, responseChan chan StreamChunk) error {
+	return llm.DoStreamPromptCompletion(prompt, enableReasoning, responseChan)
 }
 
 func GetCostOfCurrentChat(llm LLM) float64 {

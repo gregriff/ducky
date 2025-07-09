@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -24,10 +25,11 @@ type TUI struct {
 	viewport viewport.Model
 
 	// Chat state
-	input           string
-	isStreaming     bool
-	isReasoning     bool
-	currentResponse strings.Builder
+	input       string
+	isStreaming bool
+	isReasoning bool
+
+	currentResponse CurrentResponse
 	history         ChatHistory
 	responseChan    chan models.StreamChunk
 
@@ -36,9 +38,27 @@ type TUI struct {
 	styles Styles
 }
 
+type CurrentResponse struct {
+	reasoningContent strings.Builder
+	responseContent  strings.Builder
+	errorContent     string
+}
+
+// isEmpty returns true if there is any text content or an error in the current response
+func (res *CurrentResponse) isEmpty() bool {
+	if res.Len() > 0 || len(res.errorContent) > 0 {
+		return false
+	}
+	return true
+}
+
+// Len returns the total byte count of the resoning and response parts of the current response
+func (res *CurrentResponse) Len() int {
+	return res.reasoningContent.Len() + res.responseContent.Len()
+}
+
 // Bubbletea messages
 type streamComplete struct{}
-type streamError struct{ err error }
 
 func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int) *TUI {
 	tui := &TUI{
@@ -54,10 +74,6 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 	}
 
 	tui.initLLMClient(modelName)
-
-	// Add welcome message to chat history
-	// tui.addToChat("\nCommands: `:history`, `:clear`, `:exit`\n\n---\n\n")
-
 	return tui
 }
 
@@ -129,39 +145,37 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case models.StreamChunk:
-		if t.isReasoning && !msg.Reasoning {
-			t.isReasoning = false
+		text := string(msg.Content)
 
-			// this will catch if the model did not support reasoning
-			if t.currentResponse.Len() > 0 {
-				// NOTE: the number of newlines surrounding a block of text will style it differently.
-				t.currentResponse.WriteString("\n\n---\n\n")
+		if t.isReasoning {
+			if !msg.Reasoning {
+				t.isReasoning = false
+				t.currentResponse.responseContent.WriteString(text)
+			} else {
+				t.currentResponse.reasoningContent.WriteString(text)
 			}
+		} else {
+			t.currentResponse.responseContent.WriteString(text)
 		}
-		t.currentResponse.WriteString(string(msg.Content))
 		t.renderChat()
 		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
 		return t, t.waitForNextChunk()
 
-	// TODO: include usage data?
-	case streamComplete:
+	// TODO: include usage data by having DoStreamPromptCompletion return this with fields?
+	case streamComplete: // responseChan guaranteed to be empty here
 		t.isStreaming = false
+		t.isReasoning = false
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
-		t.history.AddResponse(t.currentResponse.String())
-		t.currentResponse.Reset()
+		t.history.AddResponse(&t.currentResponse)
 		t.renderChat()
 		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
 		return t, nil
 
-	case streamError:
-		t.isStreaming = false
-		t.isReasoning = false
-		// TODO: render error in a popup box or something seperate from response []string
-		t.history.AddResponse(t.currentResponse.String() + "\n\n---\n\n" + fmt.Sprintf("**Error:** %v\n\n---\n\n", msg.err))
-		t.currentResponse.Reset()
-		t.renderChat()
-		return t, nil
+	case models.StreamError:
+		log.Println("error event hit")
+		t.currentResponse.errorContent = fmt.Sprintf("**Error:** %v\n\n---\n\n", msg.ErrMsg)
+		return t, t.waitForNextChunk() // ensure last chunk is read and let chunk and complete messages handle state
 
 	case tea.WindowSizeMsg:
 		headerHeight := lipgloss.Height(t.headerView())
@@ -236,8 +250,7 @@ func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	return t, tea.Batch(
 		// m.spinner.Tick,
 		func() tea.Msg {
-			models.StreamPromptCompletion(t.model, prompt, t.enableReasoning, t.responseChan)
-			return nil
+			return models.StreamPromptCompletion(t.model, prompt, t.enableReasoning, t.responseChan)
 		},
 		t.waitForNextChunk(),
 	)
@@ -257,8 +270,7 @@ func (t *TUI) waitForNextChunk() tea.Cmd {
 // renderChat renders the full chat history plus the current response in Markdown into the viewport
 func (t *TUI) renderChat() {
 	// TODO optimizations: impl an intersection system to only t.md.Render text that is within the viewport?
-	currentResponse := t.currentResponse.String()
-	fullChat := t.history.BuildChatString(t.md, &currentResponse)
+	fullChat := t.history.BuildChatString(t.md, &t.currentResponse)
 	t.viewport.SetContent(fullChat)
 }
 
