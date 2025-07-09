@@ -135,7 +135,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// this will catch if the model did not support reasoning
 			if t.currentResponse.Len() > 0 {
 				// NOTE: the number of newlines surrounding a block of text will style it differently.
-				t.currentResponse.WriteString("\n\n---\n")
+				t.currentResponse.WriteString("\n\n---\n\n")
 			}
 		}
 		t.currentResponse.WriteString(string(msg.Content))
@@ -148,7 +148,6 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.isStreaming = false
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
-		// t.addToChat(t.currentResponse.String() + "\n\n---\n\n")
 		t.history.AddResponse(t.currentResponse.String())
 		t.currentResponse.Reset()
 		t.renderChat()
@@ -231,7 +230,6 @@ func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	}
 
 	t.history.AddPrompt(prompt, t.viewport.Width)
-	t.currentResponse.WriteString("---\n")
 	t.renderChat()
 	t.viewport.GotoBottom()
 

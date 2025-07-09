@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -31,17 +30,16 @@ func NewChatHistory() *ChatHistory {
 	}
 }
 
-// AddPrompt persists a formatted and unformatted prompt string to memory
+// AddPrompt persists a formatted and unformatted prompt string to memory given the current viewport width
 func (h *ChatHistory) AddPrompt(s string, width int) {
 	h.rawPrompts = append(h.rawPrompts, s)
 	style := lipgloss.NewStyle().Inherit(h.styles.PromptText).Width(width)
-	styledPrompt := h.changePromptWrapping(s, style, width)
+	styledPrompt := h.applyPromptPadding(s, style, width)
 	h.Prompts = append(h.Prompts, styledPrompt)
 }
 
-// AddResponse persists a formatted and unformatted response string to memory
+// AddResponse persists an unformatted response string to memory
 func (h *ChatHistory) AddResponse(s string) {
-	s = fmt.Sprintf("%s\n\n---\n\n", s)
 	h.Responses = append(h.Responses, s)
 }
 
@@ -100,11 +98,14 @@ func (h *ChatHistory) ResizePrompts(width int) {
 	style := lipgloss.NewStyle().Inherit(h.styles.PromptText).Width(width)
 
 	for i, prompt := range h.rawPrompts {
-		h.Prompts[i] = h.changePromptWrapping(prompt, style, width)
+		h.Prompts[i] = h.applyPromptPadding(prompt, style, width)
 	}
 }
 
-func (h *ChatHistory) changePromptWrapping(prompt string, style lipgloss.Style, width int) string {
-	fullStyle := style.PaddingLeft(width - lipgloss.Width(prompt) - H_PADDING*10)
+func (h *ChatHistory) applyPromptPadding(prompt string, style lipgloss.Style, width int) string {
+	fullStyle := style.
+		PaddingLeft(width - lipgloss.Width(prompt) - H_PADDING*2).
+		PaddingTop(PROMPT_V_PADDING).
+		PaddingBottom(PROMPT_V_PADDING)
 	return fullStyle.Render(prompt)
 }

@@ -11,6 +11,7 @@ type Styles struct {
 }
 
 const H_PADDING int = 1
+const PROMPT_V_PADDING = 1
 
 // makeStyles declares formatting for text throughout the TUI
 func makeStyles() (s Styles) {
@@ -26,11 +27,7 @@ func makeStyles() (s Styles) {
 		BorderTop(true).
 		Padding(0, H_PADDING)
 
-	// TODO: align right wont work. need to find way to place prompt text on the right, maybe whitespace, maybe bubbles
 	s.PromptText = lipgloss.NewStyle().
-		// BorderStyle(lipgloss.NormalBorder()).
-		Foreground(lipgloss.Color("#32cd32")).
-		AlignHorizontal(lipgloss.Right).
-		Padding(1, 0, 1, 4)
+		Foreground(lipgloss.Color("#32cd32"))
 	return s
 }
