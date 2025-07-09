@@ -17,24 +17,25 @@ func (t *TUI) handleCommand(input string) (string, bool) {
 	command := parts[0]
 	switch command {
 	case ":history":
+		// TODO: render history somewhere other than main viewport
 		return t.showHistory(), true
 	case ":clear":
-		t.promptHistory = t.promptHistory[:0]
-		t.chatHistory.Reset()
-		t.addToChat("\nHistory cleared.\n\n---\n\n")
+		t.history.Clear()
+		// t.addToChat("\nHistory cleared.\n\n---\n\n")  // TODO: render this somewhere
 		return "", true
 	default:
+		// TODO: render this somewhere else
 		return "Unknown command", true
 	}
 }
 
 func (t *TUI) showHistory() string {
-	if len(t.promptHistory) == 0 {
+	if len(t.history.rawPrompts) == 0 {
 		return "No history"
 	}
 
 	var result strings.Builder
-	for i, cmd := range t.promptHistory {
+	for i, cmd := range t.history.rawPrompts {
 		result.WriteString(fmt.Sprintf("%d: %s\n", i+1, cmd))
 	}
 

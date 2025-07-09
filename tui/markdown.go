@@ -24,7 +24,7 @@ type MarkdownRenderer struct {
 func NewMarkdownRenderer() *MarkdownRenderer {
 	return &MarkdownRenderer{
 		currentWidth:   -1, // width on init will be zero, need to use -1 to prevent deadlock
-		resizeDebounce: 100 * time.Millisecond,
+		resizeDebounce: 50 * time.Millisecond,
 	}
 }
 

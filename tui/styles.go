@@ -6,7 +6,6 @@ type Styles struct {
 	TitleBar,
 	InputArea,
 	PromptText,
-	ResponseText,
 
 	userText lipgloss.Style
 }
@@ -29,10 +28,9 @@ func makeStyles() (s Styles) {
 
 	// TODO: align right wont work. need to find way to place prompt text on the right, maybe whitespace, maybe bubbles
 	s.PromptText = lipgloss.NewStyle().
-		// BorderStyle(lipgloss.NormalBorder())
+		// BorderStyle(lipgloss.NormalBorder()).
 		Foreground(lipgloss.Color("#32cd32")).
-		AlignHorizontal(lipgloss.Right)
-	s.ResponseText = lipgloss.NewStyle().
-		AlignHorizontal(lipgloss.Left)
+		AlignHorizontal(lipgloss.Right).
+		Padding(1, 0, 1, 4)
 	return s
 }
