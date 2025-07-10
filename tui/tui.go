@@ -32,11 +32,8 @@ type TUI struct {
 	isStreaming bool
 	isReasoning bool
 
-	history      *chat.ChatHistory
+	chat         *chat.ChatModel
 	responseChan chan models.StreamChunk
-
-	// Helpers
-	md *chat.MarkdownRenderer
 }
 
 // Bubbletea messages
@@ -50,10 +47,8 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
 
-		history:      chat.NewChatHistory(),
+		chat:         chat.NewChatModel(),
 		responseChan: make(chan models.StreamChunk),
-
-		md: chat.NewMarkdownRenderer(),
 	}
 
 	t.initLLMClient(modelName)
@@ -73,7 +68,7 @@ func (t *TUI) Start() {
 // Init performs initial IO.
 func (t *TUI) Init() tea.Cmd {
 	initMarkdownRenderer := func() tea.Msg {
-		t.md.SetWidthImmediate(0)
+		t.chat.Markdown.SetWidthImmediate(0)
 		return nil
 	}
 	return tea.Batch(initMarkdownRenderer, tea.SetWindowTitle("GPT-CLI"))
@@ -133,14 +128,14 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if t.isReasoning {
 			if !msg.Reasoning {
 				t.isReasoning = false
-				t.history.CurrentResponse.ResponseContent.WriteString(text)
+				t.chat.CurrentResponse.ResponseContent.WriteString(text)
 			} else {
-				t.history.CurrentResponse.ReasoningContent.WriteString(text)
+				t.chat.CurrentResponse.ReasoningContent.WriteString(text)
 			}
 		} else {
-			t.history.CurrentResponse.ResponseContent.WriteString(text)
+			t.chat.CurrentResponse.ResponseContent.WriteString(text)
 		}
-		t.renderChat()
+		t.viewport.SetContent(t.chat.Render())
 		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
 		return t, t.waitForNextChunk()
 
@@ -150,14 +145,14 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.isReasoning = false
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
-		t.history.AddResponse()
-		t.renderChat()
+		t.chat.AddResponse()
+		t.viewport.SetContent(t.chat.Render())
 		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
 		return t, nil
 
 	case models.StreamError:
 		log.Println("error event hit")
-		t.history.CurrentResponse.ErrorContent = fmt.Sprintf("**Error:** %v\n\n---\n\n", msg.ErrMsg)
+		t.chat.CurrentResponse.ErrorContent = fmt.Sprintf("**Error:** %v\n\n---\n\n", msg.ErrMsg)
 		return t, t.waitForNextChunk() // ensure last chunk is read and let chunk and complete messages handle state
 
 	case tea.WindowSizeMsg:
@@ -170,8 +165,8 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			t.viewport.YPosition = headerHeight
 			t.viewport.MouseWheelDelta = 2
-			t.md.SetWidthImmediate(markdownWidth)
-			t.renderChat()
+			t.chat.Markdown.SetWidthImmediate(markdownWidth)
+			t.viewport.SetContent(t.chat.Render())
 			t.viewport.GotoBottom()
 			t.ready = true
 		} else {
@@ -181,10 +176,10 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// TODO: here, the markdown renderer width is not updating before rendering happens. then the
 			// viewport resize happens, still before the renderer changes width. consider forcing these to be in order
 			// for smoother resizing
-			t.md.SetWidth(markdownWidth)
+			t.chat.Markdown.SetWidth(markdownWidth)
 			// t.md.SetWidthImmediate(msg.Width)
-			t.history.ResizePrompts(msg.Width)
-			t.renderChat()
+			t.chat.ResizePrompts(msg.Width)
+			t.viewport.SetContent(t.chat.Render())
 		}
 	}
 
@@ -209,7 +204,7 @@ func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
 
 	// Process commands
 	if _, isCommand := t.handleCommand(input); isCommand {
-		t.renderChat() // needed for clear history
+		t.viewport.SetContent(t.chat.Render())
 		t.viewport.GotoBottom()
 		return t, nil
 	}
@@ -226,8 +221,8 @@ func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 		t.isReasoning = true
 	}
 
-	t.history.AddPrompt(prompt, t.viewport.Width)
-	t.renderChat()
+	t.chat.AddPrompt(prompt, t.viewport.Width)
+	t.viewport.SetContent(t.chat.Render())
 	t.viewport.GotoBottom()
 
 	return t, tea.Batch(
@@ -248,13 +243,6 @@ func (t *TUI) waitForNextChunk() tea.Cmd {
 			return streamComplete{}
 		}
 	}
-}
-
-// renderChat renders the full chat history plus the current response in Markdown into the viewport
-func (t *TUI) renderChat() {
-	// TODO optimizations: impl an intersection system to only t.md.Render text that is within the viewport?
-	fullChat := t.history.BuildChatString(t.md)
-	t.viewport.SetContent(fullChat)
 }
 
 func (t *TUI) View() string {

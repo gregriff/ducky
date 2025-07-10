@@ -16,7 +16,7 @@ func (t *TUI) handleCommand(input string) (string, bool) {
 	command := parts[0]
 	switch command {
 	case ":clear":
-		t.history.Clear()
+		t.chat.Clear()
 		// TODO: render a message somewhere
 		return "", true
 	default:

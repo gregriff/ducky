@@ -1,0 +1,175 @@
+package tui
+
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	styles "github.com/gregriff/gpt-cli-go/tui/styles"
+)
+
+type CurrentResponse struct {
+	ReasoningContent strings.Builder
+	ResponseContent  strings.Builder
+	ErrorContent     string
+}
+
+// isEmpty returns true if there is any text content or an error in the current response
+func (res *CurrentResponse) isEmpty() bool {
+	if res.Len() > 0 || len(res.ErrorContent) > 0 {
+		return false
+	}
+	return true
+}
+
+// Len returns the total byte count of the resoning and response parts of the current response
+func (res *CurrentResponse) Len() int {
+	return res.ReasoningContent.Len() + res.ResponseContent.Len()
+}
+
+// ChatModel stores the state of the current chat with the LLM and formats prompts/responses
+type ChatModel struct {
+	styles *styles.ChatStylesStruct
+
+	history         []ChatEntry
+	CurrentResponse *CurrentResponse
+	TotalCost       float64
+
+	chatBuilder strings.Builder
+	Markdown    *MarkdownRenderer
+}
+
+func NewChatModel() *ChatModel {
+	return &ChatModel{
+		styles: &styles.ChatStyles,
+
+		CurrentResponse: &CurrentResponse{},
+		history:         make([]ChatEntry, 0, 10),
+		Markdown:        NewMarkdownRenderer(),
+	}
+}
+
+func (c *ChatModel) numPrompts() int {
+	return len(c.history) // prompts determine the creation of new chat entries
+}
+
+func (c *ChatModel) numResponses() int {
+	totalResponses := 0
+	for _, entry := range c.history {
+		if len(entry.response) > 0 {
+			totalResponses += 1
+		}
+	}
+	return totalResponses
+}
+
+// AddPrompt creates a new ChatEntry with prompt data given the current viewport width
+func (c *ChatModel) AddPrompt(s string, width int) {
+	style := lipgloss.NewStyle().Inherit(c.styles.PromptText).Width(width)
+
+	newEntry := &ChatEntry{rawPrompt: s}
+	newEntry.setPromptPadding(style, width)
+	c.history = append(c.history, *newEntry)
+}
+
+// AddResponse updates the latest ChatEntry with the data from CurrentResponse. Must be called after AddPrompt
+func (c *ChatModel) AddResponse() {
+	s := c.CurrentResponse
+
+	curChatEntry := &c.history[len(c.history)-1]
+	curChatEntry.reasoningResponse = s.ReasoningContent.String()
+	curChatEntry.response = s.ResponseContent.String()
+	curChatEntry.error = s.ErrorContent
+
+	s.ReasoningContent.Reset()
+	s.ResponseContent.Reset()
+	s.ErrorContent = ""
+}
+
+// Render builds and returns a string of the entire chat history for rendering in the viewport
+func (c *ChatModel) Render() string {
+	// TODO: this runs every time a re-render happens so it is slower than the original approach
+	// of keeping the chat history in a stringbuilder. We could still do that in this struct
+
+	// TODO: only reset if width has changed (pass a width) and keep a copy of the chatBuilder without the currentResponse
+	// so that we can just rerender the markdown of the current response and append that to the builder and then return that string
+
+	defer c.chatBuilder.Reset()
+	numPrompts := c.numPrompts()
+
+	// Pre-calculate total size for both prompts and responses
+	totalSize := 0
+	minLen := min(numPrompts, c.numResponses())
+
+	for i := range minLen {
+		totalSize += len(c.history[i].prompt) + len(c.history[i].reasoningResponse) + len(c.history[i].response)
+	}
+
+	totalSize += c.CurrentResponse.Len()
+	totalSize = int(float64(totalSize) * 1.4) // assuming markdown ansi will add max 40% more bytes
+	c.chatBuilder.Grow(totalSize)
+
+	for i := range minLen {
+		prompt, response, error :=
+			c.history[i].prompt,
+			c.history[i].response,
+			c.history[i].error
+
+		// response at index N will correspond to prompt at index N
+		c.chatBuilder.WriteString(prompt)
+
+		// TODO: check for showReasoning
+		// reasoningMarkdown := markdownRenderer.Render(h.ReasoningResponses[i])
+		// reasoningFormatted := h.styles.ReasoningText.Render(reasoningMarkdown)
+		// // reasoningFormatted := h.styles.ReasoningText.Render(h.ReasoningResponses[i])
+		// h.chatBuilder.WriteString(reasoningFormatted)
+		// h.chatBuilder.WriteString(markdownRenderer.Render("\n---\n"))
+
+		c.chatBuilder.WriteString(c.Markdown.Render(response))
+
+		if len(error) > 0 {
+			errorFormatted := c.styles.ErrorText.Render(error)
+			c.chatBuilder.WriteString(errorFormatted)
+		}
+	}
+
+	// if we just sent a prompt
+	if minLen < numPrompts {
+		c.chatBuilder.WriteString(c.history[minLen].prompt)
+
+		// TODO: cant render reasoning or error sections if empty because of lipgloss formatting
+		if !c.CurrentResponse.isEmpty() {
+			reasoningMarkdown := c.Markdown.Render(c.CurrentResponse.ReasoningContent.String())
+			reasoningFormatted := c.styles.ReasoningText.Render(reasoningMarkdown)
+			// reasoningFormatted := h.styles.ReasoningText.Render(currentResponse.reasoningContent.String())
+			c.chatBuilder.WriteString(reasoningFormatted)
+
+			if len(c.CurrentResponse.ResponseContent.String()) > 0 {
+				c.chatBuilder.WriteString(c.Markdown.Render("\n---\n"))
+			}
+
+			c.chatBuilder.WriteString(c.Markdown.Render(c.CurrentResponse.ResponseContent.String()))
+
+			if len(c.CurrentResponse.ErrorContent) > 0 {
+				errorFormatted := c.styles.ErrorText.Render(c.CurrentResponse.ErrorContent)
+				c.chatBuilder.WriteString(errorFormatted)
+			}
+		}
+	}
+	return c.chatBuilder.String()
+}
+
+func (c *ChatModel) Clear() {
+	// TODO: save unsaved history in temporary sqlite DB or in-memory for accidental clears
+	c.history = c.history[:0]
+}
+
+// The below functions should go in another file
+
+// ResizePrompts recreates h.Prompts for correct wrapping given a width
+func (c *ChatModel) ResizePrompts(width int) {
+	style := lipgloss.NewStyle().Inherit(c.styles.PromptText).Width(width)
+
+	for i := range len(c.history) {
+		c.history[i].setPromptPadding(style, width)
+	}
+}
