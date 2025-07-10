@@ -2,13 +2,11 @@
 - n/A
 
 ## Additional Features:
-- actually render errors
 - impl select+copying of viewport content
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
 - figure out why haiku wont work
 - debounce scroll/slow it
 - fix debounced markdown renderer resizing
-- make chat history look like imessage or at least align it as such
 - add thinking, first response blinkers
 - add textbox component
 - make custom glamour stylesheet to render the centered H2s

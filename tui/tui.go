@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -24,11 +25,11 @@ type TUI struct {
 
 	// UI state
 	ready    bool
+	textarea textarea.Model
 	viewport viewport.Model
 
 	// Chat state
 	chat         *chat.ChatModel
-	input        string
 	isStreaming  bool
 	isReasoning  bool
 	responseChan chan models.StreamChunk
@@ -38,12 +39,32 @@ type TUI struct {
 type streamComplete struct{}
 
 func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int) *TUI {
+	ta := textarea.New()
+	ta.Placeholder = "Send a message..."
+	ta.Focus()
+
+	ta.Prompt = "┃ "
+	ta.CharLimit = 5000
+
+	ta.SetWidth(30)
+	ta.SetHeight(3)
+
+	// Remove cursor line styling
+	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ta.ShowLineNumbers = false
+
+	vp := viewport.New(30, 5)
+	vp.SetContent(" > ")
+
+	ta.KeyMap.InsertNewline.SetEnabled(false)
 	t := &TUI{
 		styles: &styles.TUIStyles,
 
 		systemPrompt:    systemPrompt,
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
+
+		textarea: ta,
 
 		chat:         chat.NewChatModel(),
 		responseChan: make(chan models.StreamChunk),
@@ -69,14 +90,17 @@ func (t *TUI) Init() tea.Cmd {
 		t.chat.Markdown.SetWidthImmediate(0)
 		return nil
 	}
-	return tea.Batch(initMarkdownRenderer, tea.SetWindowTitle("GPT-CLI"))
+	return tea.Batch(initMarkdownRenderer, tea.SetWindowTitle("GPT-CLI"), textarea.Blink)
 }
 
 func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
-		cmd  tea.Cmd
-		cmds []tea.Cmd
+		tiCmd,
+		vpCmd tea.Cmd
 	)
+
+	t.textarea, tiCmd = t.textarea.Update(msg)
+	t.viewport, vpCmd = t.viewport.Update(msg)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -85,8 +109,8 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msgString {
 		case "ctrl+d":
 			return t, tea.Quit
-		case "ctrl+u":
-			t.input = ""
+		// case "ctrl+u":
+		// t.input = ""
 		case "esc":
 			t.viewport.GotoBottom()
 		}
@@ -114,16 +138,16 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyEnter:
 			return t.processUserInput()
-		case tea.KeyBackspace:
-			if len(t.input) > 0 {
-				t.input = t.input[:len(t.input)-1]
-			}
-			return t, nil
-		default:
-			if IsValidPromptInput(msgString) {
-				t.input += msgString
-			}
-			return t, nil
+			// case tea.KeyBackspace:
+			// 	if len(t.input) > 0 {
+			// 		t.input = t.input[:len(t.input)-1]
+			// 	}
+			// 	return t, nil
+			// default:
+			// 	if IsValidPromptInput(msgString) {
+			// 		t.input += msgString
+			// 	}
+			// 	return t, nil
 		}
 
 	case models.StreamChunk:
@@ -190,17 +214,13 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Handle viewport updates
-	t.viewport, cmd = t.viewport.Update(msg)
-	cmds = append(cmds, cmd)
-
-	return t, tea.Batch(cmds...)
+	return t, tea.Batch(tiCmd, vpCmd)
 }
 
 // processUserInput performs actions when the user clicks Enter
 func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
-	input := strings.TrimSpace(t.input)
-	t.input = ""
+	input := strings.TrimSpace(t.textarea.Value())
+	t.textarea.Reset()
 
 	if input == "" {
 		return t, nil
@@ -251,7 +271,7 @@ func (t *TUI) View() string {
 		return "Initializing..."
 	}
 
-	return fmt.Sprintf("%s\n%s\n%s", t.headerView(), t.viewport.View(), t.inputView())
+	return fmt.Sprintf("%s\n%s\n%s", t.headerView(), t.viewport.View(), t.textarea.View())
 }
 
 func (t *TUI) headerView() string {
@@ -271,10 +291,10 @@ func (t *TUI) headerView() string {
 	return style.Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
 }
 
-func (t *TUI) inputView() string {
-	prompt := fmt.Sprintf(" > %s", t.input)
-	return t.styles.InputArea.Render(prompt)
-}
+// func (t *TUI) inputView() string {
+// 	prompt := fmt.Sprintf(" > %s", t.input)
+// 	return t.styles.InputArea.Render(prompt)
+// }
 
 // initLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
 // in order to switch between LLMs while preserving message history
