@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -11,14 +12,6 @@ type CurrentResponse struct {
 	ReasoningContent strings.Builder
 	ResponseContent  strings.Builder
 	ErrorContent     string
-}
-
-// isEmpty returns true if there is any text content or an error in the current response
-func (res *CurrentResponse) isEmpty() bool {
-	if res.Len() > 0 || len(res.ErrorContent) > 0 {
-		return false
-	}
-	return true
 }
 
 // Len returns the total byte count of the resoning and response parts of the current response
@@ -76,7 +69,7 @@ func (c *ChatModel) AddResponse() {
 	s := c.CurrentResponse
 
 	curChatEntry := &c.history[len(c.history)-1]
-	curChatEntry.reasoningResponse = s.ReasoningContent.String()
+	curChatEntry.reasoning = s.ReasoningContent.String()
 	curChatEntry.response = s.ResponseContent.String()
 	curChatEntry.error = s.ErrorContent
 
@@ -85,7 +78,7 @@ func (c *ChatModel) AddResponse() {
 	s.ErrorContent = ""
 }
 
-// Render builds and returns a string of the entire chat history for rendering in the viewport
+// Render returns a string of the entire chat history in markdown and wrapped to a certain width
 func (c *ChatModel) Render() string {
 	// TODO: this runs every time a re-render happens so it is slower than the original approach
 	// of keeping the chat history in a stringbuilder. We could still do that in this struct
@@ -94,21 +87,22 @@ func (c *ChatModel) Render() string {
 	// so that we can just rerender the markdown of the current response and append that to the builder and then return that string
 
 	defer c.builder.Reset()
-	numPrompts := c.numPrompts()
+	numPrompts, numResponses := c.numPrompts(), c.numResponses()
+	if numPrompts == 0 && numResponses == 0 {
+		return ""
+	}
 
 	// Pre-calculate total size for both prompts and responses
 	totalSize := 0
-	minLen := min(numPrompts, c.numResponses())
-
-	for i := range minLen {
-		totalSize += len(c.history[i].prompt) + len(c.history[i].reasoningResponse) + len(c.history[i].response)
+	for i := range len(c.history) {
+		totalSize += len(c.history[i].prompt) + len(c.history[i].reasoning) + len(c.history[i].response)
 	}
-
 	totalSize += c.CurrentResponse.Len()
 	totalSize = int(float64(totalSize) * 1.4) // assuming markdown ansi will add max 40% more bytes
 	c.builder.Grow(totalSize)
 
-	for i := range minLen {
+	// Render chat
+	for i := range len(c.history) {
 		prompt, response, error :=
 			c.history[i].prompt,
 			c.history[i].response,
@@ -126,35 +120,26 @@ func (c *ChatModel) Render() string {
 
 		c.builder.WriteString(c.Markdown.Render(response))
 
+		log.Println("err: ", error)
 		if len(error) > 0 {
-			errorFormatted := c.styles.ErrorText.Render(error)
-			c.builder.WriteString(errorFormatted)
+			c.builder.WriteString(c.Markdown.Render(error))
 		}
 	}
 
-	// if we just sent a prompt
-	if minLen < numPrompts {
-		c.builder.WriteString(c.history[minLen].prompt)
+	// Render current response being streamed
+	if c.CurrentResponse.Len() > 0 { // pretty much == "isStreaming" TODO: revise
+		reasoningMarkdown := c.Markdown.Render(c.CurrentResponse.ReasoningContent.String())
+		reasoningFormatted := c.styles.ReasoningText.Render(reasoningMarkdown) // TODO: cant render reasoning section if empty because of lipgloss formatting
+		// reasoningFormatted := h.styles.ReasoningText.Render(currentResponse.reasoningContent.String())
+		c.builder.WriteString(reasoningFormatted)
 
-		// TODO: cant render reasoning or error sections if empty because of lipgloss formatting
-		if !c.CurrentResponse.isEmpty() {
-			reasoningMarkdown := c.Markdown.Render(c.CurrentResponse.ReasoningContent.String())
-			reasoningFormatted := c.styles.ReasoningText.Render(reasoningMarkdown)
-			// reasoningFormatted := h.styles.ReasoningText.Render(currentResponse.reasoningContent.String())
-			c.builder.WriteString(reasoningFormatted)
-
-			if len(c.CurrentResponse.ResponseContent.String()) > 0 {
-				c.builder.WriteString(c.Markdown.Render("\n---\n"))
-			}
-
-			c.builder.WriteString(c.Markdown.Render(c.CurrentResponse.ResponseContent.String()))
-
-			if len(c.CurrentResponse.ErrorContent) > 0 {
-				errorFormatted := c.styles.ErrorText.Render(c.CurrentResponse.ErrorContent)
-				c.builder.WriteString(errorFormatted)
-			}
+		if len(c.CurrentResponse.ResponseContent.String()) > 0 {
+			c.builder.WriteString(c.Markdown.Render("\n---\n"))
 		}
+
+		c.builder.WriteString(c.Markdown.Render(c.CurrentResponse.ResponseContent.String()))
 	}
+
 	return c.builder.String()
 }
 

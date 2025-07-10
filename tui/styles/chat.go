@@ -18,8 +18,9 @@ var ChatStyles = ChatStylesStruct{
 		// Faint(true).
 		PaddingLeft(H_PADDING),
 
-	ErrorText: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#ff0000")).
-		PaddingBottom(PROMPT_V_PADDING).
-		PaddingTop(PROMPT_V_PADDING),
+	// ErrorText: lipgloss.NewStyle().
+	// 	Foreground(lipgloss.Color("#32cd32")).
+	// 	// Foreground(lipgloss.Color("#ff0000")).
+	// 	PaddingBottom(PROMPT_V_PADDING).
+	// 	PaddingTop(PROMPT_V_PADDING),
 }

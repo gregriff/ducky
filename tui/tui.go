@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -17,9 +16,9 @@ import (
 type TUI struct {
 	styles *styles.TUIStylesStruct
 
+	// user args TODO: combine these into a PromptContext struct (and add a context._), along with isStreaming + isReasoning?
 	model           models.LLM
 	systemPrompt    string
-	totalCost       float64
 	maxTokens       int
 	enableReasoning bool
 
@@ -28,11 +27,10 @@ type TUI struct {
 	viewport viewport.Model
 
 	// Chat state
-	input       string
-	isStreaming bool
-	isReasoning bool
-
 	chat         *chat.ChatModel
+	input        string
+	isStreaming  bool
+	isReasoning  bool
 	responseChan chan models.StreamChunk
 }
 
@@ -147,6 +145,10 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// TODO: include usage data by having DoStreamPromptCompletion return this with fields?
 	case streamComplete: // responseChan guaranteed to be empty here
+		// if a StreamError occurs before response streaming begins, two waitForNextChunks will return streamComplete
+		if t.isStreaming == false {
+			return t, nil
+		}
 		t.isStreaming = false
 		t.isReasoning = false
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
@@ -157,8 +159,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, nil
 
 	case models.StreamError:
-		log.Println("error event hit")
-		t.chat.CurrentResponse.ErrorContent = fmt.Sprintf("**Error:** %v\n\n---\n\n", msg.ErrMsg)
+		t.chat.CurrentResponse.ErrorContent = fmt.Sprintf("**Error:** %v", msg.ErrMsg)
 		return t, t.waitForNextChunk() // ensure last chunk is read and let chunk and complete messages handle state
 
 	case tea.WindowSizeMsg:
@@ -196,6 +197,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return t, tea.Batch(cmds...)
 }
 
+// processUserInput performs actions when the user clicks Enter
 func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
 	input := strings.TrimSpace(t.input)
 	t.input = ""

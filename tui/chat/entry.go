@@ -10,7 +10,7 @@ type ChatEntry struct {
 
 	// unformatted for storage (but still valid Markdown)
 	rawPrompt,
-	reasoningResponse,
+	reasoning,
 	response,
 	error string
 }

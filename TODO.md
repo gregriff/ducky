@@ -3,7 +3,8 @@
 
 ## Additional Features:
 - actually render errors
-- scroll to top of current prompt upon clicking enter to send the prompt
+- impl select+copying of viewport content
+- impl some consistent scrolling or positioning when user clicks enter to submit a prompt
 - figure out why haiku wont work
 - debounce scroll/slow it
 - fix debounced markdown renderer resizing
