@@ -2,6 +2,7 @@
 - n/A
 
 ## Additional Features:
+- actually render errors
 - scroll to top of current prompt upon clicking enter to send the prompt
 - figure out why haiku wont work
 - debounce scroll/slow it

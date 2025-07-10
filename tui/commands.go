@@ -4,7 +4,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -16,9 +15,6 @@ func (t *TUI) handleCommand(input string) (string, bool) {
 
 	command := parts[0]
 	switch command {
-	case ":history":
-		// TODO: render history somewhere other than main viewport
-		return t.showHistory(), true
 	case ":clear":
 		t.history.Clear()
 		// TODO: render a message somewhere
@@ -27,17 +23,4 @@ func (t *TUI) handleCommand(input string) (string, bool) {
 		// TODO: render this somewhere else
 		return "Unknown command", true
 	}
-}
-
-func (t *TUI) showHistory() string {
-	if len(t.history.RawPrompts) == 0 {
-		return "No history"
-	}
-
-	var result strings.Builder
-	for i, cmd := range t.history.RawPrompts {
-		result.WriteString(fmt.Sprintf("%d: %s\n", i+1, cmd))
-	}
-
-	return strings.TrimSuffix(result.String(), "\n")
 }
