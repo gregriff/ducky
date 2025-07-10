@@ -104,6 +104,12 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// while streaming, anything below this will not be accessible
 		if t.isStreaming {
+			break
+		}
+
+		if msgString == "ctrl+c" {
+			t.chat.Clear() // print something
+			t.viewport.SetContent(t.chat.Render())
 			return t, nil
 		}
 
@@ -200,13 +206,6 @@ func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
 
 	if input == ":exit" || input == ":quit" {
 		return t, tea.Quit
-	}
-
-	// Process commands
-	if _, isCommand := t.handleCommand(input); isCommand {
-		t.viewport.SetContent(t.chat.Render())
-		t.viewport.GotoBottom()
-		return t, nil
 	}
 
 	// Start LLM streaming

@@ -34,8 +34,8 @@ type ChatModel struct {
 	CurrentResponse *CurrentResponse
 	TotalCost       float64
 
-	chatBuilder strings.Builder
-	Markdown    *MarkdownRenderer
+	builder  strings.Builder
+	Markdown *MarkdownRenderer
 }
 
 func NewChatModel() *ChatModel {
@@ -93,7 +93,7 @@ func (c *ChatModel) Render() string {
 	// TODO: only reset if width has changed (pass a width) and keep a copy of the chatBuilder without the currentResponse
 	// so that we can just rerender the markdown of the current response and append that to the builder and then return that string
 
-	defer c.chatBuilder.Reset()
+	defer c.builder.Reset()
 	numPrompts := c.numPrompts()
 
 	// Pre-calculate total size for both prompts and responses
@@ -106,7 +106,7 @@ func (c *ChatModel) Render() string {
 
 	totalSize += c.CurrentResponse.Len()
 	totalSize = int(float64(totalSize) * 1.4) // assuming markdown ansi will add max 40% more bytes
-	c.chatBuilder.Grow(totalSize)
+	c.builder.Grow(totalSize)
 
 	for i := range minLen {
 		prompt, response, error :=
@@ -115,7 +115,7 @@ func (c *ChatModel) Render() string {
 			c.history[i].error
 
 		// response at index N will correspond to prompt at index N
-		c.chatBuilder.WriteString(prompt)
+		c.builder.WriteString(prompt)
 
 		// TODO: check for showReasoning
 		// reasoningMarkdown := markdownRenderer.Render(h.ReasoningResponses[i])
@@ -124,38 +124,38 @@ func (c *ChatModel) Render() string {
 		// h.chatBuilder.WriteString(reasoningFormatted)
 		// h.chatBuilder.WriteString(markdownRenderer.Render("\n---\n"))
 
-		c.chatBuilder.WriteString(c.Markdown.Render(response))
+		c.builder.WriteString(c.Markdown.Render(response))
 
 		if len(error) > 0 {
 			errorFormatted := c.styles.ErrorText.Render(error)
-			c.chatBuilder.WriteString(errorFormatted)
+			c.builder.WriteString(errorFormatted)
 		}
 	}
 
 	// if we just sent a prompt
 	if minLen < numPrompts {
-		c.chatBuilder.WriteString(c.history[minLen].prompt)
+		c.builder.WriteString(c.history[minLen].prompt)
 
 		// TODO: cant render reasoning or error sections if empty because of lipgloss formatting
 		if !c.CurrentResponse.isEmpty() {
 			reasoningMarkdown := c.Markdown.Render(c.CurrentResponse.ReasoningContent.String())
 			reasoningFormatted := c.styles.ReasoningText.Render(reasoningMarkdown)
 			// reasoningFormatted := h.styles.ReasoningText.Render(currentResponse.reasoningContent.String())
-			c.chatBuilder.WriteString(reasoningFormatted)
+			c.builder.WriteString(reasoningFormatted)
 
 			if len(c.CurrentResponse.ResponseContent.String()) > 0 {
-				c.chatBuilder.WriteString(c.Markdown.Render("\n---\n"))
+				c.builder.WriteString(c.Markdown.Render("\n---\n"))
 			}
 
-			c.chatBuilder.WriteString(c.Markdown.Render(c.CurrentResponse.ResponseContent.String()))
+			c.builder.WriteString(c.Markdown.Render(c.CurrentResponse.ResponseContent.String()))
 
 			if len(c.CurrentResponse.ErrorContent) > 0 {
 				errorFormatted := c.styles.ErrorText.Render(c.CurrentResponse.ErrorContent)
-				c.chatBuilder.WriteString(errorFormatted)
+				c.builder.WriteString(errorFormatted)
 			}
 		}
 	}
-	return c.chatBuilder.String()
+	return c.builder.String()
 }
 
 func (c *ChatModel) Clear() {
