@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"log"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -120,7 +119,6 @@ func (c *ChatModel) Render() string {
 
 		c.builder.WriteString(c.Markdown.Render(response))
 
-		log.Println("err: ", error)
 		if len(error) > 0 {
 			c.builder.WriteString(c.Markdown.Render(error))
 		}

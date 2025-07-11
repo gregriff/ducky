@@ -33,6 +33,8 @@ type TUI struct {
 	isStreaming  bool
 	isReasoning  bool
 	responseChan chan models.StreamChunk
+
+	preventScrollToBottom bool
 }
 
 // Bubbletea messages
@@ -96,14 +98,11 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		vpCmd tea.Cmd
 	)
 
-	t.textarea, tiCmd = t.textarea.Update(msg)
-	t.viewport, vpCmd = t.viewport.Update(msg)
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		keyString := msg.String()
 
-		msgString := msg.String()
-		switch msgString {
+		switch keyString {
 		case "ctrl+d":
 			return t, tea.Quit
 		case "esc":
@@ -124,14 +123,28 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 
-		if msgString == "ctrl+c" {
+		switch keyString {
+		case "ctrl+c":
 			t.chat.Clear() // print something
 			t.viewport.SetContent(t.chat.Render())
 			return t, nil
+		case "enter":
+			input := strings.TrimSpace(t.textarea.Value())
+			t.textarea.Reset()
+
+			if input == "" {
+				return t, nil
+			}
+
+			// Start LLM streaming
+			return t.promptLLM(input)
 		}
 
-		if msg.Type == tea.KeyEnter {
-			return t.processUserInput()
+	case tea.MouseMsg:
+		if msg.Button == tea.MouseButtonWheelUp {
+			if t.isStreaming { // allow user to scroll up during streaming and keep their position
+				t.preventScrollToBottom = true
+			}
 		}
 
 	case models.StreamChunk:
@@ -148,7 +161,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.chat.CurrentResponse.ResponseContent.WriteString(text)
 		}
 		t.viewport.SetContent(t.chat.Render())
-		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
+		if !t.preventScrollToBottom {
+			t.viewport.GotoBottom()
+		}
 		return t, t.waitForNextChunk()
 
 	// TODO: include usage data by having DoStreamPromptCompletion return this with fields?
@@ -159,6 +174,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		t.isStreaming = false
 		t.isReasoning = false
+		t.preventScrollToBottom = false
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		t.chat.AddResponse()
@@ -199,24 +215,10 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// ensure we aren't returning nil above these lines and therefore blocking messages to these models
+	t.textarea, tiCmd = t.textarea.Update(msg)
+	t.viewport, vpCmd = t.viewport.Update(msg)
 	return t, tea.Batch(tiCmd, vpCmd)
-}
-
-// processUserInput performs actions when the user clicks Enter
-func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
-	input := strings.TrimSpace(t.textarea.Value())
-	t.textarea.Reset()
-
-	if input == "" {
-		return t, nil
-	}
-
-	if input == ":exit" || input == ":quit" {
-		return t, tea.Quit
-	}
-
-	// Start LLM streaming
-	return t.promptLLM(input)
 }
 
 // promptLLM makes the LLM API request, handles TUI state and begins listening for the response stream
