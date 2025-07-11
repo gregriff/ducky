@@ -40,21 +40,18 @@ type streamComplete struct{}
 
 func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int) *TUI {
 	ta := textarea.New()
-	ta.Placeholder = "Send a message..."
+	ta.Placeholder = "Send a prompt..."
 	ta.Focus()
 
 	ta.Prompt = "┃ "
-	ta.CharLimit = 5000
+	ta.CharLimit = -1
 
-	ta.SetWidth(30)
-	ta.SetHeight(3)
+	// ta.SetWidth(30)
+	ta.SetHeight(4)
 
 	// Remove cursor line styling
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	ta.ShowLineNumbers = false
-
-	vp := viewport.New(30, 5)
-	vp.SetContent(" > ")
 
 	ta.KeyMap.InsertNewline.SetEnabled(false)
 	t := &TUI{
@@ -109,8 +106,6 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msgString {
 		case "ctrl+d":
 			return t, tea.Quit
-		// case "ctrl+u":
-		// t.input = ""
 		case "esc":
 			t.viewport.GotoBottom()
 		}
@@ -135,19 +130,8 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return t, nil
 		}
 
-		switch msg.Type {
-		case tea.KeyEnter:
+		if msg.Type == tea.KeyEnter {
 			return t.processUserInput()
-			// case tea.KeyBackspace:
-			// 	if len(t.input) > 0 {
-			// 		t.input = t.input[:len(t.input)-1]
-			// 	}
-			// 	return t, nil
-			// default:
-			// 	if IsValidPromptInput(msgString) {
-			// 		t.input += msgString
-			// 	}
-			// 	return t, nil
 		}
 
 	case models.StreamChunk:
@@ -188,9 +172,8 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		headerHeight := lipgloss.Height(t.headerView())
-		inputHeight := 3
-		verticalMarginHeight := headerHeight + inputHeight
-		markdownWidth := msg.Width * 4 / 5
+		verticalMarginHeight := headerHeight + t.textarea.Height()
+		markdownWidth := msg.Width * 6 / 7
 
 		if !t.ready {
 			t.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
@@ -199,6 +182,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.chat.Markdown.SetWidthImmediate(markdownWidth)
 			t.viewport.SetContent(t.chat.Render())
 			t.viewport.GotoBottom()
+			t.textarea.SetWidth(msg.Width - styles.H_PADDING)
 			t.ready = true
 		} else {
 			t.viewport.Width = msg.Width
@@ -210,6 +194,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.chat.Markdown.SetWidth(markdownWidth)
 			// t.md.SetWidthImmediate(msg.Width)
 			t.chat.ResizePrompts(msg.Width)
+			t.textarea.SetWidth(msg.Width - styles.H_PADDING)
 			t.viewport.SetContent(t.chat.Render())
 		}
 	}
@@ -290,11 +275,6 @@ func (t *TUI) headerView() string {
 	style := t.styles.TitleBar.Width(max(0, maxWidth))
 	return style.Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
 }
-
-// func (t *TUI) inputView() string {
-// 	prompt := fmt.Sprintf(" > %s", t.input)
-// 	return t.styles.InputArea.Render(prompt)
-// }
 
 // initLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
 // in order to switch between LLMs while preserving message history
