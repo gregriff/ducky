@@ -7,17 +7,6 @@ import (
 	styles "github.com/gregriff/gpt-cli-go/tui/styles"
 )
 
-type CurrentResponse struct {
-	ReasoningContent strings.Builder
-	ResponseContent  strings.Builder
-	ErrorContent     string
-}
-
-// Len returns the total byte count of the resoning and response parts of the current response
-func (res *CurrentResponse) Len() int {
-	return res.ReasoningContent.Len() + res.ResponseContent.Len()
-}
-
 // ChatModel stores the state of the current chat with the LLM and formats prompts/responses
 type ChatModel struct {
 	styles *styles.ChatStylesStruct
@@ -28,6 +17,17 @@ type ChatModel struct {
 
 	builder  strings.Builder
 	Markdown *MarkdownRenderer
+}
+
+type CurrentResponse struct {
+	ReasoningContent strings.Builder
+	ResponseContent  strings.Builder
+	ErrorContent     string
+}
+
+// Len returns the total byte count of the resoning and response parts of the current response
+func (res *CurrentResponse) Len() int {
+	return res.ReasoningContent.Len() + res.ResponseContent.Len()
 }
 
 func NewChatModel() *ChatModel {
@@ -55,11 +55,13 @@ func (c *ChatModel) numResponses() int {
 }
 
 // AddPrompt creates a new ChatEntry with prompt data given the current viewport width
-func (c *ChatModel) AddPrompt(s string, width int) {
-	style := lipgloss.NewStyle().Inherit(c.styles.PromptText).Width(width)
+func (c *ChatModel) AddPrompt(s string, vpWidth int) {
+	textWidth := int(float64(vpWidth) * styles.PROMPT_WIDTH_PROPORTION)
+	marginStyle := lipgloss.NewStyle().Width(vpWidth - textWidth)
+	contentStyle := lipgloss.NewStyle().Inherit(c.styles.PromptText).Width(vpWidth)
 
 	newEntry := &ChatEntry{rawPrompt: s}
-	newEntry.setPromptPadding(style, width)
+	newEntry.setFormattedPrompt(marginStyle, contentStyle, textWidth)
 	c.history = append(c.history, *newEntry)
 }
 
@@ -126,6 +128,7 @@ func (c *ChatModel) Render() string {
 
 	// Render current response being streamed
 	if c.CurrentResponse.Len() > 0 { // pretty much == "isStreaming" TODO: revise
+		// TODO: don't print reasoning if model doesn't support (haiku) or user said no reasoning
 		reasoningMarkdown := c.Markdown.Render(c.CurrentResponse.ReasoningContent.String())
 		reasoningFormatted := c.styles.ReasoningText.Render(reasoningMarkdown) // TODO: cant render reasoning section if empty because of lipgloss formatting
 		// reasoningFormatted := h.styles.ReasoningText.Render(currentResponse.reasoningContent.String())
@@ -148,11 +151,16 @@ func (c *ChatModel) Clear() {
 
 // The below functions should go in another file
 
-// ResizePrompts recreates h.Prompts for correct wrapping given a width
-func (c *ChatModel) ResizePrompts(width int) {
-	style := lipgloss.NewStyle().Inherit(c.styles.PromptText).Width(width)
+// ResizePrompts recreates h.Prompts for correct wrapping given the viewport width
+func (c *ChatModel) ResizePrompts(vpWidth int) {
+	// style := lipgloss.NewStyle().Inherit(c.styles.PromptText).Width(vpWidth)
+	textWidth := int(float64(vpWidth) * styles.PROMPT_WIDTH_PROPORTION)
+	marginStyle := lipgloss.NewStyle().Width(vpWidth - textWidth)
+	contentStyle := lipgloss.NewStyle().Inherit(c.styles.PromptText).Width(vpWidth)
 
+	// TODO: ensure c.history is aligned well
 	for i := range len(c.history) {
-		c.history[i].setPromptPadding(style, width)
+		// c.history[i].setPromptPadding(style, vpWidth)
+		c.history[i].setFormattedPrompt(marginStyle, contentStyle, textWidth)
 	}
 }

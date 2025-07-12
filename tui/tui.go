@@ -52,9 +52,10 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 	ta.SetHeight(4)
 
 	// Remove cursor line styling
-	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ta.FocusedStyle.CursorLine = styles.TUIStyles.TextAreaCursor
 	ta.ShowLineNumbers = false
 
+	// TODO: need this to be bound to shift+enter
 	ta.KeyMap.InsertNewline.SetEnabled(false)
 	t := &TUI{
 		styles: &styles.TUIStyles,
@@ -189,7 +190,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		headerHeight := lipgloss.Height(t.headerView())
 		verticalMarginHeight := headerHeight + t.textarea.Height()
-		markdownWidth := msg.Width * 6 / 7
+		markdownWidth := int(float64(msg.Width) * styles.RESPONSE_WIDTH_PROPORTION)
 
 		if !t.ready {
 			t.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)

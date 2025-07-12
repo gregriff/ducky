@@ -15,10 +15,12 @@ type ChatEntry struct {
 	error string
 }
 
-func (c *ChatEntry) setPromptPadding(style lipgloss.Style, width int) {
-	fullStyle := style.
-		PaddingLeft(width - lipgloss.Width(c.rawPrompt) - styles.H_PADDING*2).
+// setFormattedPrompt overwrites the .prompt field, setting it to a string with a margin and padding.
+// this func is used to format the rawPrompt with a margin and left padding to render it like an iMessage user text
+func (c *ChatEntry) setFormattedPrompt(marginStyle, contentStyle lipgloss.Style, maxWidth int) {
+	fullStyle := contentStyle.
+		PaddingLeft(maxWidth - lipgloss.Width(c.rawPrompt) - styles.H_PADDING*2).
 		PaddingTop(styles.PROMPT_V_PADDING).
 		PaddingBottom(styles.PROMPT_V_PADDING)
-	c.prompt = fullStyle.Render(c.rawPrompt)
+	c.prompt = lipgloss.JoinHorizontal(lipgloss.Top, marginStyle.Render(""), fullStyle.Render(c.rawPrompt))
 }

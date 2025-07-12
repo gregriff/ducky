@@ -5,7 +5,8 @@ import "github.com/charmbracelet/lipgloss"
 type TUIStylesStruct struct {
 	TitleBar,
 	InputArea,
-	PromptText lipgloss.Style
+	PromptText,
+	TextAreaCursor lipgloss.Style
 }
 
 // makeStyles declares formatting for text throughout the TUI
@@ -24,4 +25,6 @@ var TUIStyles = TUIStylesStruct{
 
 	PromptText: lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#32cd32")),
+
+	TextAreaCursor: lipgloss.NewStyle(),
 }
