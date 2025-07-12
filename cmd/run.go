@@ -4,6 +4,7 @@ Copyright © 2025 Greg Griffin <greg.griffin2@gmail.com>
 package cmd
 
 import (
+	"github.com/charmbracelet/lipgloss"
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
 	"github.com/gregriff/gpt-cli-go/tui"
 	"github.com/spf13/cobra"
@@ -44,6 +45,13 @@ func init() {
 
 func runTUI(cmd *cobra.Command, args []string) {
 	systemPrompt := "You are a concise assistant to a software engineer"
-	tui := tui.NewTUI(systemPrompt, modelName, enableReasoning, 2048)
+
+	// https://github.com/charmbracelet/glamour/issues/405#issuecomment-2741476242
+	glamourStyle := "light"
+	if lipgloss.HasDarkBackground() {
+		glamourStyle = "dark"
+	}
+
+	tui := tui.NewTUI(systemPrompt, modelName, enableReasoning, 2048, glamourStyle)
 	tui.Start()
 }

@@ -30,13 +30,13 @@ func (res *CurrentResponse) Len() int {
 	return res.ReasoningContent.Len() + res.ResponseContent.Len()
 }
 
-func NewChatModel() *ChatModel {
+func NewChatModel(glamourStyle string) *ChatModel {
 	return &ChatModel{
 		styles: &styles.ChatStyles,
 
 		CurrentResponse: &CurrentResponse{},
 		history:         make([]ChatEntry, 0, 10),
-		Markdown:        NewMarkdownRenderer(),
+		Markdown:        NewMarkdownRenderer(glamourStyle),
 	}
 }
 
@@ -81,12 +81,8 @@ func (c *ChatModel) AddResponse() {
 
 // Render returns a string of the entire chat history in markdown and wrapped to a certain width
 func (c *ChatModel) Render() string {
-	// TODO: this runs every time a re-render happens so it is slower than the original approach
-	// of keeping the chat history in a stringbuilder. We could still do that in this struct
-
 	// TODO: only reset if width has changed (pass a width) and keep a copy of the chatBuilder without the currentResponse
 	// so that we can just rerender the markdown of the current response and append that to the builder and then return that string
-
 	defer c.builder.Reset()
 	numPrompts, numResponses := c.numPrompts(), c.numResponses()
 	if numPrompts == 0 && numResponses == 0 {
@@ -118,7 +114,6 @@ func (c *ChatModel) Render() string {
 		// // reasoningFormatted := h.styles.ReasoningText.Render(h.ReasoningResponses[i])
 		// h.chatBuilder.WriteString(reasoningFormatted)
 		// h.chatBuilder.WriteString(markdownRenderer.Render("\n---\n"))
-
 		c.builder.WriteString(c.Markdown.Render(response))
 
 		if len(error) > 0 {
@@ -130,14 +125,11 @@ func (c *ChatModel) Render() string {
 	if c.CurrentResponse.Len() > 0 { // pretty much == "isStreaming" TODO: revise
 		// TODO: don't print reasoning if model doesn't support (haiku) or user said no reasoning
 		reasoningMarkdown := c.Markdown.Render(c.CurrentResponse.ReasoningContent.String())
-		reasoningFormatted := c.styles.ReasoningText.Render(reasoningMarkdown) // TODO: cant render reasoning section if empty because of lipgloss formatting
-		// reasoningFormatted := h.styles.ReasoningText.Render(currentResponse.reasoningContent.String())
-		c.builder.WriteString(reasoningFormatted)
+		c.builder.WriteString(reasoningMarkdown)
 
-		if len(c.CurrentResponse.ResponseContent.String()) > 0 {
+		if c.CurrentResponse.ResponseContent.Len() > 0 {
 			c.builder.WriteString(c.Markdown.Render("\n---\n"))
 		}
-
 		c.builder.WriteString(c.Markdown.Render(c.CurrentResponse.ResponseContent.String()))
 	}
 

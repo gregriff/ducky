@@ -15,14 +15,16 @@ type MarkdownRenderer struct {
 	mtx      sync.RWMutex
 	renderer *glamour.TermRenderer
 
+	style          string
 	currentWidth   int
 	pendingWidth   int
 	resizeTimer    *time.Timer
 	resizeDebounce time.Duration
 }
 
-func NewMarkdownRenderer() *MarkdownRenderer {
+func NewMarkdownRenderer(glamourStyle string) *MarkdownRenderer {
 	return &MarkdownRenderer{
+		style:          glamourStyle,
 		currentWidth:   -1, // width on init will be zero, need to use -1 to prevent deadlock
 		resizeDebounce: 50 * time.Millisecond,
 	}
@@ -92,7 +94,7 @@ func (md *MarkdownRenderer) createRenderer(width int) {
 	}
 	renderer, err := glamour.NewTermRenderer(
 		// glamour.WithAutoStyle(), // this results in a hanging func call because of an ENOTTY
-		glamour.WithStylePath("tokyo-night"),
+		glamour.WithStylePath(md.style),
 		glamour.WithEmoji(),
 		glamour.WithWordWrap(width),
 	)

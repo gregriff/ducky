@@ -40,7 +40,7 @@ type TUI struct {
 // Bubbletea messages
 type streamComplete struct{}
 
-func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int) *TUI {
+func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUI {
 	ta := textarea.New()
 	ta.Placeholder = "Send a prompt..."
 	ta.Focus()
@@ -66,7 +66,7 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 
 		textarea: ta,
 
-		chat:         chat.NewChatModel(),
+		chat:         chat.NewChatModel(glamourStyle),
 		responseChan: make(chan models.StreamChunk),
 	}
 
@@ -86,11 +86,7 @@ func (t *TUI) Start() {
 
 // Init performs initial IO.
 func (t *TUI) Init() tea.Cmd {
-	initMarkdownRenderer := func() tea.Msg {
-		t.chat.Markdown.SetWidthImmediate(0)
-		return nil
-	}
-	return tea.Batch(initMarkdownRenderer, tea.SetWindowTitle("GPT-CLI"), textarea.Blink)
+	return tea.Batch(tea.SetWindowTitle("GPT-CLI"), textarea.Blink)
 }
 
 func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
