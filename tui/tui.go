@@ -27,11 +27,14 @@ type TUI struct {
 	ready    bool
 	textarea textarea.Model
 	viewport viewport.Model
+	// selecting bool
+	// selectionStart,
+	// selectionEnd int
 
 	// Chat state
-	chat         *chat.ChatModel
-	isStreaming  bool
-	isReasoning  bool
+	chat *chat.ChatModel
+	isStreaming,
+	isReasoning bool
 	responseChan chan models.StreamChunk
 
 	preventScrollToBottom bool
