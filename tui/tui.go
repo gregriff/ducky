@@ -212,7 +212,25 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ensure we aren't returning nil above these lines and therefore blocking messages to these models
 	t.textarea, tiCmd = t.textarea.Update(msg)
-	t.viewport, vpCmd = t.viewport.Update(msg)
+
+	// prevent movement keys from scrolling the viewport
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "d":
+			break
+		case "u":
+			break
+		case "b":
+			break
+		case "j":
+			break
+		case "k":
+			break
+		}
+	default:
+		t.viewport, vpCmd = t.viewport.Update(msg)
+	}
 	return t, tea.Batch(tiCmd, vpCmd)
 }
 
