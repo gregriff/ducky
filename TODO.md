@@ -2,8 +2,8 @@
 - n/A
 
 ## Additional Features:
+- fix prompt wrap calc on window resize
 - use bubblezones to multiplex scrolling between viewport and textarea? (look at bubbletea example of batching cmds)
-- PERSIST LLM HTTP CLIENT TO AVOID TCP ROUNDTRIP
 - impl select+copying of viewport content
 - fix scrolling of textarea
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt

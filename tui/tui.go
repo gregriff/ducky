@@ -43,17 +43,16 @@ type streamComplete struct{}
 func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUI {
 	// create and style textarea
 	ta := textarea.New()
+	ta.ShowLineNumbers = false
+	ta.KeyMap.InsertNewline.SetEnabled(false) // TODO: need this to be bound to shift+enter
 	ta.Placeholder = "Send a prompt..."
 	ta.FocusedStyle.Placeholder = styles.TUIStyles.PromptText
-	ta.Focus()
+	ta.FocusedStyle.CursorLine = styles.TUIStyles.TextAreaCursor
 	ta.Prompt = "┃ "
 	ta.CharLimit = -1
+	ta.Focus()
 	ta.SetHeight(4)
-	ta.FocusedStyle.CursorLine = styles.TUIStyles.TextAreaCursor
-	ta.ShowLineNumbers = false
 
-	// TODO: need this to be bound to shift+enter
-	ta.KeyMap.InsertNewline.SetEnabled(false)
 	t := &TUI{
 		styles: &styles.TUIStyles,
 
@@ -119,6 +118,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch keyString {
 		case "ctrl+c":
+			if t.chat.HistoryLen() == 0 {
+				return t, tea.Quit
+			}
 			t.chat.Clear() // print something
 			t.viewport.SetContent(t.chat.Render(t.viewport.Width))
 			return t, nil

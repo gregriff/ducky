@@ -121,14 +121,14 @@ func (c *ChatModel) Render(vpWidth int) string {
 // on screen. If the viewport width has changed since the last render, the prompt will be resized accordingly. It is assumed that the
 // .Markdown renderer has already been resized before this function is called.
 func (c *ChatModel) renderChatHistory(startingIndex, vpWidth int) int {
-	textWidth := int(float64(vpWidth) * styles.PROMPT_WIDTH_PROPORTION)
-	marginStyle := lipgloss.NewStyle().Width(vpWidth - textWidth)
-	contentStyle := lipgloss.NewStyle().Inherit(c.styles.PromptText).Width(vpWidth)
+	maxPromptWidth := int(float64(vpWidth) * styles.PROMPT_WIDTH_PROPORTION)
+	marginStyle := lipgloss.NewStyle().Width(vpWidth - maxPromptWidth)
+	promptStyle := lipgloss.NewStyle().Inherit(c.styles.PromptText).Width(maxPromptWidth)
 
 	numChats := len(c.history)
 	for i := startingIndex; i < numChats; i++ {
 		prompt, response, error :=
-			c.history[i].createFormattedPrompt(marginStyle, contentStyle, textWidth),
+			c.history[i].createFormattedPrompt(marginStyle, promptStyle, maxPromptWidth),
 			c.history[i].response,
 			c.history[i].error
 
@@ -154,4 +154,8 @@ func (c *ChatModel) renderCurrentResponse() string {
 func (c *ChatModel) Clear() {
 	// TODO: save unsaved history in temporary sqlite DB or in-memory for accidental clears
 	c.history = c.history[:0]
+}
+
+func (c *ChatModel) HistoryLen() int {
+	return len(c.history)
 }

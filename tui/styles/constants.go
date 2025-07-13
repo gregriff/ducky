@@ -7,5 +7,5 @@ const (
 
 	// widths relative to viewport width (100% term width - H_PADDING*2)
 	PROMPT_WIDTH_PROPORTION   float64 = 6 / 7.
-	RESPONSE_WIDTH_PROPORTION float64 = PROMPT_WIDTH_PROPORTION
+	RESPONSE_WIDTH_PROPORTION float64 = 9 / 10.
 )
