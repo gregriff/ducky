@@ -41,17 +41,14 @@ type TUI struct {
 type streamComplete struct{}
 
 func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUI {
+	// create and style textarea
 	ta := textarea.New()
 	ta.Placeholder = "Send a prompt..."
+	ta.FocusedStyle.Placeholder = styles.TUIStyles.PromptText
 	ta.Focus()
-
 	ta.Prompt = "┃ "
 	ta.CharLimit = -1
-
-	// ta.SetWidth(30)
 	ta.SetHeight(4)
-
-	// Remove cursor line styling
 	ta.FocusedStyle.CursorLine = styles.TUIStyles.TextAreaCursor
 	ta.ShowLineNumbers = false
 
@@ -134,6 +131,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Start LLM streaming
+			t.textarea.Blur()
 			return t.promptLLM(input)
 		}
 
@@ -177,6 +175,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.viewport.SetContent(t.chat.Render(t.viewport.Width))
 
 		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
+		t.textarea.Focus()
 		return t, nil
 
 	case models.StreamError:
@@ -221,7 +220,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	t.responseChan = make(chan models.StreamChunk)
 	t.isStreaming = true
-	if t.enableReasoning {
+	if t.enableReasoning { // TODO: && model.supportsReasoning (make new interface func)
 		t.isReasoning = true
 	}
 
@@ -258,20 +257,18 @@ func (t *TUI) View() string {
 }
 
 func (t *TUI) headerView() string {
-	// TODO: my alacritty term is cropping the term window so i need this
-	const R_PADDING int = styles.H_PADDING * 2
-
 	leftText := "GPT-CLI"
 	rightText := models.GetModelId(t.model)
 	if t.isStreaming {
 		leftText += " (streaming...)" // TODO: loading spinner
 	}
-	maxWidth := t.viewport.Width - R_PADDING
+	maxWidth := t.viewport.Width - styles.HEADER_R_PADDING
 	titleTextWidth := lipgloss.Width(leftText) + lipgloss.Width(rightText) + 2 // the two border chars
 	spacing := strings.Repeat(" ", max(5, maxWidth-titleTextWidth))
 
-	style := t.styles.TitleBar.Width(max(0, maxWidth))
-	return style.Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
+	return t.styles.TitleBar.Width(max(0, maxWidth)).
+		Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
+
 }
 
 // initLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later

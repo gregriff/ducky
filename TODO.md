@@ -2,12 +2,11 @@
 - n/A
 
 ## Additional Features:
-- finalize response margins
+- use bubblezones to multiplex scrolling between viewport and textarea? (look at bubbletea example of batching cmds)
 - impl select+copying of viewport content
 - fix scrolling of textarea
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
 - shrink textarea while streaming (no input allowed)
-- use bubblezones to multiplex scrolling between viewport and textarea?
 - use contexts with streaming to cancel after 10 secs of no API response, resetting this timer if a chunk is recieved
 - fix debounced markdown renderer resizing
 - add thinking, first response blinkers

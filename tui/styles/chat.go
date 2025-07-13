@@ -3,14 +3,12 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 type ChatStylesStruct struct {
-	PromptText,
-	ReasoningText,
-	ErrorText lipgloss.Style
+	PromptText lipgloss.Style
 }
 
 var ChatStyles = ChatStylesStruct{
 	PromptText: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#32cd32")),
+		Foreground(lipgloss.Color("#32cd32")), // green
 
 	// ReasoningText: lipgloss.NewStyle().
 	// Foreground(lipgloss.Color("#a9a9a9")).
