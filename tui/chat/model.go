@@ -76,11 +76,9 @@ func (c *ChatModel) AddResponse() {
 	s.ErrorContent = ""
 }
 
-// Render returns a string of the entire chat history in markdown, wrapped to a certain width
+// Render returns a string of the entire chat history in markdown, wrapped to a certain width. If the vpWidth hasn't changed since the
+// last call to this func, the pre-rendered chat history will be reused and the CurrentResponse will be appended to it
 func (c *ChatModel) Render(vpWidth int) string {
-	// TODO: only reset if width has changed (pass a width) and keep a copy of the chatBuilder without the currentResponse
-	// so that we can just rerender the markdown of the current response and append that to the builder and then return that string
-
 	numPrompts, numResponses := c.numPrompts(), c.numResponses()
 	if numPrompts == 0 && numResponses == 0 {
 		return ""

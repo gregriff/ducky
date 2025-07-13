@@ -8,6 +8,8 @@ import (
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
 	"github.com/gregriff/gpt-cli-go/tui"
 	"github.com/spf13/cobra"
+
+	zone "github.com/lrstanley/bubblezone"
 )
 
 var (
@@ -52,6 +54,7 @@ func runTUI(cmd *cobra.Command, args []string) {
 		glamourStyle = "dark"
 	}
 
+	zone.NewGlobal()
 	tui := tui.NewTUI(systemPrompt, modelName, enableReasoning, 2048, glamourStyle)
 	tui.Start()
 }

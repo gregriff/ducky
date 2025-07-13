@@ -2,8 +2,11 @@ package tui
 
 import (
 	"fmt"
+	"log"
+	"regexp"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,6 +15,7 @@ import (
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
 	chat "github.com/gregriff/gpt-cli-go/tui/chat"
 	styles "github.com/gregriff/gpt-cli-go/tui/styles"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 type TUI struct {
@@ -27,9 +31,15 @@ type TUI struct {
 	ready    bool
 	textarea textarea.Model
 	viewport viewport.Model
-	// selecting bool
-	// selectionStart,
-	// selectionEnd int
+
+	// select+copy impl:
+	// - only allow selecting text when not streaming
+	// - pressing mouse down on viewport will enter select mode, mouse up will copy to clipboard (like tmux)
+	// - ignore keyboard input while selecting
+	// -
+	selecting bool
+	selectionLineStart,
+	selectionLineEnd int
 
 	// Chat state
 	chat *chat.ChatModel
@@ -136,7 +146,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Start LLM streaming
-			t.textarea.Blur()
+			if t.textarea.Focused() {
+				t.textarea.Blur()
+			}
 			return t.promptLLM(input)
 		}
 
@@ -145,6 +157,54 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if t.isStreaming { // allow user to scroll up during streaming and keep their position
 				t.preventScrollToBottom = true
 			}
+			break
+		}
+
+		switch msg.Action {
+		case tea.MouseActionPress: // handles all mouse clicks
+			if t.isStreaming || msg.Button != tea.MouseButtonLeft || t.selecting {
+				return t, nil
+			}
+
+			textareaFocused := t.textarea.Focused()
+			if zone.Get("chatViewport").InBounds(msg) {
+				if textareaFocused && t.chat.HistoryLen() > 0 {
+					t.textarea.Blur() // TODO: need to collapse it as well
+				}
+				// begin selecting text
+				t.selecting = true
+				t.selectionLineStart = t.mouseToPosition(msg.Y)
+				log.Println("KEYDOWN: set selecting start:", t.selectionLineStart, "raw: ", msg.X, msg.Y)
+
+			} else if zone.Get("promptInput").InBounds(msg) && !textareaFocused {
+				t.textarea.Focus()
+			}
+		}
+
+		// anything below this handles events while user is holding down the mouse to copy text
+		if !t.selecting {
+			break
+		}
+
+		// log.Println("entered selecting logic")
+
+		switch msg.Action {
+		case tea.MouseActionMotion: // handle dragging of mouse during selection
+			// update copy state
+			t.selectionLineEnd = t.mouseToPosition(msg.Y)
+			log.Println("DRAG: set selection end: ", t.selectionLineEnd, "raw: ", msg.X, msg.Y)
+		// TODO: render history with colored background around selection
+		case tea.MouseActionRelease: // send to clipboard and reset state
+			t.selectionLineEnd = t.mouseToPosition(msg.Y)
+			log.Println("KEYUP: set selection end: ", t.selectionLineEnd)
+			if text := t.getSelectedText(); len(text) > 0 {
+				log.Println("\n\nSELECTED TEXT: ", text)
+				clipboard.WriteAll(text)
+			}
+			t.selecting = false
+			t.selectionLineStart = -1
+			t.selectionLineEnd = -1
+			// TODO: render normal history
 		}
 
 	case models.StreamChunk:
@@ -180,7 +240,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.viewport.SetContent(t.chat.Render(t.viewport.Width))
 
 		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
-		t.textarea.Focus()
+		if !t.textarea.Focused() {
+			t.textarea.Focus()
+		}
 		return t, nil
 
 	case models.StreamError:
@@ -231,6 +293,57 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return t, tea.Batch(tiCmd, vpCmd)
 }
 
+// Strip ANSI escape codes from text
+func stripANSI(text string) string {
+	// Regular expression to match ANSI escape sequences
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	return ansiRegex.ReplaceAllString(text, "")
+}
+
+// mouseToPosition converts mouse coordinates to the line number within the main viewport
+func (t *TUI) mouseToPosition(y int) int {
+	vpContent := t.chat.Render(t.viewport.Width)
+	vpContent = stripANSI(vpContent)
+	lines := strings.Split(vpContent, "\n") // Split content into lines for position calculation
+	line := max(y+t.viewport.YOffset, 0)
+
+	if line >= len(lines) {
+		line = len(lines) - 1
+	}
+
+	log.Println("mousetoPosition: lineNo:", line, "curLineLen:", len(lines[line]), "numLines:", len(lines))
+
+	return line
+}
+
+// getSelectedText returns on-screen text selected by the user clicking and dragging their mouse
+func (t *TUI) getSelectedText() string {
+	start, end := t.selectionLineStart, t.selectionLineEnd
+
+	vpContent := t.chat.Render(t.viewport.Width) // getSelectedText should never be called in a place where the width has changed
+	vpContent = stripANSI(vpContent)
+	lines := strings.Split(vpContent, "\n") // Split content into lines for selection extraction
+
+	// Ensure start comes before end
+	if start > end {
+		start, end = end, start
+	}
+
+	// if lines[len(lines)-1] == ""
+
+	// log.Println("GET TEXT: start,end:", start, end)
+	// log.Println("GET TEXT: len(lines):", len(lines))
+	// log.Println("GET TEXT: lines[start]:", lines[start])
+	// log.Printf("\n%q", lines)
+
+	var result []string
+	for i := start; i <= end && i < len(lines); i++ {
+		result = append(result, lines[i])
+	}
+
+	return strings.Join(result, "\n")
+}
+
 // promptLLM makes the LLM API request, handles TUI state and begins listening for the response stream
 func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	t.responseChan = make(chan models.StreamChunk)
@@ -267,8 +380,12 @@ func (t *TUI) View() string {
 	if !t.ready {
 		return "Initializing..."
 	}
-
-	return fmt.Sprintf("%s\n%s\n%s", t.headerView(), t.viewport.View(), t.textarea.View())
+	return zone.Scan(
+		fmt.Sprintf("%s\n%s\n%s",
+			t.headerView(),
+			zone.Mark("chatViewport", t.viewport.View()),
+			zone.Mark("promptInput", t.textarea.View())),
+	)
 }
 
 func (t *TUI) headerView() string {
