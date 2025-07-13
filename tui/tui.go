@@ -222,15 +222,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "d":
-			break
-		case "u":
-			break
-		case "b":
-			break
-		case "j":
-			break
-		case "k":
+		case "d", "u", "b", "j", "k":
 			break
 		}
 	default:
