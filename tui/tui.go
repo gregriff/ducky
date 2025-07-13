@@ -123,7 +123,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch keyString {
 		case "ctrl+c":
 			t.chat.Clear() // print something
-			t.viewport.SetContent(t.chat.Render())
+			t.viewport.SetContent(t.chat.Render(t.viewport.Width))
 			return t, nil
 		case "enter":
 			input := strings.TrimSpace(t.textarea.Value())
@@ -145,19 +145,17 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case models.StreamChunk:
-		text := string(msg.Content)
-
 		if t.isReasoning {
 			if !msg.Reasoning {
 				t.isReasoning = false
-				t.chat.CurrentResponse.ResponseContent.WriteString(text)
+				t.chat.CurrentResponse.ResponseContent.WriteString(msg.Content)
 			} else {
-				t.chat.CurrentResponse.ReasoningContent.WriteString(text)
+				t.chat.CurrentResponse.ReasoningContent.WriteString(msg.Content)
 			}
 		} else {
-			t.chat.CurrentResponse.ResponseContent.WriteString(text)
+			t.chat.CurrentResponse.ResponseContent.WriteString(msg.Content)
 		}
-		t.viewport.SetContent(t.chat.Render())
+		t.viewport.SetContent(t.chat.Render(t.viewport.Width))
 		if !t.preventScrollToBottom {
 			t.viewport.GotoBottom()
 		}
@@ -175,7 +173,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		t.chat.AddResponse()
-		t.viewport.SetContent(t.chat.Render())
+
+		t.viewport.SetContent(t.chat.Render(t.viewport.Width))
+
 		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
 		return t, nil
 
@@ -193,7 +193,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.viewport.YPosition = headerHeight
 			t.viewport.MouseWheelDelta = 2
 			t.chat.Markdown.SetWidthImmediate(markdownWidth)
-			t.viewport.SetContent(t.chat.Render())
+			t.viewport.SetContent(t.chat.Render(msg.Width))
 			t.viewport.GotoBottom()
 			t.textarea.SetWidth(msg.Width - styles.H_PADDING)
 			t.ready = true
@@ -206,9 +206,8 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// for smoother resizing
 			t.chat.Markdown.SetWidth(markdownWidth)
 			// t.md.SetWidthImmediate(msg.Width)
-			t.chat.ResizePrompts(msg.Width)
 			t.textarea.SetWidth(msg.Width - styles.H_PADDING)
-			t.viewport.SetContent(t.chat.Render())
+			t.viewport.SetContent(t.chat.Render(msg.Width))
 		}
 	}
 
@@ -226,8 +225,8 @@ func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 		t.isReasoning = true
 	}
 
-	t.chat.AddPrompt(prompt, t.viewport.Width)
-	t.viewport.SetContent(t.chat.Render())
+	t.chat.AddPrompt(prompt)
+	t.viewport.SetContent(t.chat.Render(t.viewport.Width))
 	t.viewport.GotoBottom()
 
 	return t, tea.Batch(
