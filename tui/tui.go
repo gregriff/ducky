@@ -2,11 +2,11 @@ package tui
 
 import (
 	"fmt"
-	"log"
-	"regexp"
+	"os"
+	"os/exec"
 	"strings"
+	"time"
 
-	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -32,14 +32,8 @@ type TUI struct {
 	textarea textarea.Model
 	viewport viewport.Model
 
-	// select+copy impl:
-	// - only allow selecting text when not streaming
-	// - pressing mouse down on viewport will enter select mode, mouse up will copy to clipboard (like tmux)
-	// - ignore keyboard input while selecting
-	// -
-	selecting bool
-	selectionLineStart,
-	selectionLineEnd int
+	lastLeftClick time.Time
+	pagerTempfile string
 
 	// Chat state
 	chat *chat.ChatModel
@@ -52,6 +46,9 @@ type TUI struct {
 
 // Bubbletea messages
 type streamComplete struct{}
+
+type pagerExit struct{}
+type pagerError struct{ err error }
 
 func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUI {
 	// create and style textarea
@@ -77,6 +74,8 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 
 		chat:         chat.NewChatModel(glamourStyle),
 		responseChan: make(chan models.StreamChunk),
+
+		pagerTempfile: "temp.history",
 	}
 
 	t.initLLMClient(modelName)
@@ -87,6 +86,7 @@ func (t *TUI) Start() {
 	p := tea.NewProgram(t,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
+		// tea.WithReportFocus(),
 	)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v", err)
@@ -113,6 +113,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return t, tea.Quit
 		case "esc":
 			t.viewport.GotoBottom()
+			if !t.textarea.Focused() {
+				t.textarea.Focus()
+			}
 		}
 
 		// TODO: impl cancel response WITH CONTEXTS
@@ -160,51 +163,72 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 
+		// the switch below will capture this button and prevent scroll so break out
+		if msg.Button == tea.MouseButtonWheelDown {
+			break
+		}
+
 		switch msg.Action {
-		case tea.MouseActionPress: // handles all mouse clicks
-			if t.isStreaming || msg.Button != tea.MouseButtonLeft || t.selecting {
+		case tea.MouseActionPress: // handles all mouse EVENTS  TODO: re-evaluate for bugs
+			if t.isStreaming || msg.Button != tea.MouseButtonLeft {
 				return t, nil
 			}
 
 			textareaFocused := t.textarea.Focused()
 			if zone.Get("chatViewport").InBounds(msg) {
-				if textareaFocused && t.chat.HistoryLen() > 0 {
+				if t.chat.HistoryLen() == 0 {
+					break
+				}
+				if textareaFocused {
 					t.textarea.Blur() // TODO: need to collapse it as well
 				}
-				// begin selecting text
-				t.selecting = true
-				t.selectionLineStart = t.mouseToPosition(msg.Y)
-				log.Println("KEYDOWN: set selecting start:", t.selectionLineStart, "raw: ", msg.X, msg.Y)
+				if time.Since(t.lastLeftClick) < 300*time.Millisecond {
+					selectedLine := max((msg.Y+t.viewport.YOffset)-t.viewport.Height/2, 0)              // line of text user clicked
+					err := os.WriteFile(t.pagerTempfile, []byte(t.chat.Render(t.viewport.Width)), 0644) // should be its own tea.Msg?
+					if err != nil {
+						return t, func() tea.Msg {
+							return pagerError{err: err}
+						}
+					}
+					cmd := exec.Command(
+						"less",
+						fmt.Sprintf("+%d", selectedLine),
+						"--use-color",       // display ANSI colors
+						"--chop-long-lines", // dont wrap long lines
+						"--quit-on-intr",    // quit on ctrl+c
+						"--incsearch",       // incremental search
+						fmt.Sprintf("--prompt=%s", `?eEOF ?m(response %i of %m).`),
+						// "--color=PkY.EkY",   // set prompt and error color to black on bright yellow
+						// fmt.Sprintf("--prompt=%s", `COPY MODE | %pb\% %BB ?m(response %i of %m).`), // (section %dt/%D)
+						//
+						// STATUS COLUMN: shows marks and matches in leftmost col
+						// - width must be <= than H_PADDING or prompts will be truncated
+						// - prompt and response strings would need to have their ending character removed
+						//   to prevent less from showing truncation symbol
+						// "--status-column",   // shows marks and matches
+						// fmt.Sprintf("--status-col-width=%d", styles.H_PADDING),
+						// "--save-marks", will need this later
+						t.pagerTempfile,
+					)
+					cmd.Env = append(os.Environ(),
+						"LESSSECURE=1", // disables in-pager shell, editing, pipe etc.
+					)
+					onPagerExit := func(err error) tea.Msg {
+						if err != nil {
+							return pagerError{err: err}
+						}
+						return pagerExit{}
+					}
+					return t, tea.ExecProcess(cmd, onPagerExit)
+				} else {
+					t.lastLeftClick = time.Now()
+				}
 
-			} else if zone.Get("promptInput").InBounds(msg) && !textareaFocused {
-				t.textarea.Focus()
+			} else if zone.Get("promptInput").InBounds(msg) {
+				if !textareaFocused {
+					t.textarea.Focus()
+				}
 			}
-		}
-
-		// anything below this handles events while user is holding down the mouse to copy text
-		if !t.selecting {
-			break
-		}
-
-		// log.Println("entered selecting logic")
-
-		switch msg.Action {
-		case tea.MouseActionMotion: // handle dragging of mouse during selection
-			// update copy state
-			t.selectionLineEnd = t.mouseToPosition(msg.Y)
-			log.Println("DRAG: set selection end: ", t.selectionLineEnd, "raw: ", msg.X, msg.Y)
-		// TODO: render history with colored background around selection
-		case tea.MouseActionRelease: // send to clipboard and reset state
-			t.selectionLineEnd = t.mouseToPosition(msg.Y)
-			log.Println("KEYUP: set selection end: ", t.selectionLineEnd)
-			if text := t.getSelectedText(); len(text) > 0 {
-				log.Println("\n\nSELECTED TEXT: ", text)
-				clipboard.WriteAll(text)
-			}
-			t.selecting = false
-			t.selectionLineStart = -1
-			t.selectionLineEnd = -1
-			// TODO: render normal history
 		}
 
 	case models.StreamChunk:
@@ -248,6 +272,17 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case models.StreamError:
 		t.chat.CurrentResponse.ErrorContent = fmt.Sprintf("**Error:** %v", msg.ErrMsg)
 		return t, t.waitForNextChunk() // ensure last chunk is read and let chunk and complete messages handle state
+
+	case pagerExit:
+		// pager lets term control mouse for selecting/copying. Regain those controls and fullscreen
+		return t, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, t.removeTempFile)
+
+	case pagerError:
+		pagerErr := msg.err.Error()
+		if pagerErr != "exit status 2" {
+			t.textarea.InsertString(fmt.Sprintf("Pager Error: %s\n", pagerErr))
+		}
+		return t, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, t.removeTempFile)
 
 	case tea.WindowSizeMsg:
 		headerHeight := lipgloss.Height(t.headerView())
@@ -293,55 +328,12 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return t, tea.Batch(tiCmd, vpCmd)
 }
 
-// Strip ANSI escape codes from text
-func stripANSI(text string) string {
-	// Regular expression to match ANSI escape sequences
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
-	return ansiRegex.ReplaceAllString(text, "")
-}
-
-// mouseToPosition converts mouse coordinates to the line number within the main viewport
-func (t *TUI) mouseToPosition(y int) int {
-	vpContent := t.chat.Render(t.viewport.Width)
-	vpContent = stripANSI(vpContent)
-	lines := strings.Split(vpContent, "\n") // Split content into lines for position calculation
-	line := max(y+t.viewport.YOffset, 0)
-
-	if line >= len(lines) {
-		line = len(lines) - 1
+func (t *TUI) removeTempFile() tea.Msg {
+	err := os.Remove(t.pagerTempfile)
+	if err != nil {
+		t.textarea.InsertString(fmt.Sprintf("Error deleting tempfile: %e\n", err))
 	}
-
-	log.Println("mousetoPosition: lineNo:", line, "curLineLen:", len(lines[line]), "numLines:", len(lines))
-
-	return line
-}
-
-// getSelectedText returns on-screen text selected by the user clicking and dragging their mouse
-func (t *TUI) getSelectedText() string {
-	start, end := t.selectionLineStart, t.selectionLineEnd
-
-	vpContent := t.chat.Render(t.viewport.Width) // getSelectedText should never be called in a place where the width has changed
-	vpContent = stripANSI(vpContent)
-	lines := strings.Split(vpContent, "\n") // Split content into lines for selection extraction
-
-	// Ensure start comes before end
-	if start > end {
-		start, end = end, start
-	}
-
-	// if lines[len(lines)-1] == ""
-
-	// log.Println("GET TEXT: start,end:", start, end)
-	// log.Println("GET TEXT: len(lines):", len(lines))
-	// log.Println("GET TEXT: lines[start]:", lines[start])
-	// log.Printf("\n%q", lines)
-
-	var result []string
-	for i := start; i <= end && i < len(lines); i++ {
-		result = append(result, lines[i])
-	}
-
-	return strings.Join(result, "\n")
+	return nil
 }
 
 // promptLLM makes the LLM API request, handles TUI state and begins listening for the response stream
