@@ -180,8 +180,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 
+		// handles all mouse EVENTS  TODO: re-evaluate for bugs
 		switch msg.Action {
-		case tea.MouseActionPress: // handles all mouse EVENTS  TODO: re-evaluate for bugs
+		case tea.MouseActionRelease:
 			if t.isStreaming || msg.Button != tea.MouseButtonLeft {
 				return t, nil
 			}
@@ -303,8 +304,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.windowSize = msg
 
 		headerHeight := lipgloss.Height(t.headerView())
-		textAreaHeight := t.ta.Height()
-		verticalMarginHeight := headerHeight + textAreaHeight // NOTE: if you adjust the newlines in View() this will need to change
+		// textAreaHeight := t.ta.Height()
+		textAreaHeight := lipgloss.Height(t.ta.View())
+		verticalMarginHeight := headerHeight + textAreaHeight + 1 // +1 for spacing in View()
 
 		viewportHeight := msg.Height - verticalMarginHeight
 		textAreaWidth := msg.Width - styles.H_PADDING
@@ -313,7 +315,6 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 		if !t.ready {
 			t.vp = viewport.New(msg.Width, viewportHeight)
-			// t.vp.YPosition = headerHeight
 			t.vp.MouseWheelDelta = 2
 			t.chat.Markdown.SetWidthImmediate(markdownWidth)
 			t.vp.SetContent(t.chat.Render(msg.Width))
@@ -407,11 +408,14 @@ func (t *TUI) View() string {
 	if !t.ready {
 		return "Initializing..."
 	}
+	// NOTE: if you change this you need to change code in the window resize event handler
+	spacing := "\n"
 	return zone.Scan(
-		fmt.Sprintf("%s%s\n\n%s",
+		fmt.Sprintf("%s\n%s\n%s", // NOTE: newlines needed between every component placed vertically (so they're not sidebyside and wrapped)
 			t.headerView(),
 			zone.Mark("chatViewport", t.vp.View()),
-			zone.Mark("promptInput", t.ta.View())),
+			zone.Mark("promptInput", spacing+t.ta.View()),
+		),
 	)
 }
 
