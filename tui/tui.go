@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,9 +29,10 @@ type TUI struct {
 	enableReasoning bool
 
 	// UI state
-	ready    bool
-	textarea textarea.Model
-	viewport viewport.Model
+	ready   bool
+	ta      textarea.Model
+	vp      viewport.Model
+	spinner spinner.Model
 
 	lastLeftClick,
 	lastManualGoToBottom time.Time
@@ -64,6 +66,10 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 	ta.Focus()
 	ta.SetHeight(4)
 
+	s := spinner.New()
+	s.Spinner = spinner.Points
+	s.Style = styles.TUIStyles.Spinner
+
 	t := &TUI{
 		styles: &styles.TUIStyles,
 
@@ -71,7 +77,8 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
 
-		textarea: ta,
+		ta:      ta,
+		spinner: s,
 
 		chat:         chat.NewChatModel(glamourStyle),
 		responseChan: make(chan models.StreamChunk),
@@ -102,6 +109,7 @@ func (t *TUI) Init() tea.Cmd {
 func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		tiCmd,
+		sCmd,
 		vpCmd tea.Cmd
 	)
 
@@ -113,10 +121,10 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+d":
 			return t, tea.Quit
 		case "esc":
-			t.viewport.GotoBottom()
+			t.vp.GotoBottom()
 			t.lastManualGoToBottom = time.Now()
-			if !t.textarea.Focused() {
-				t.textarea.Focus()
+			if !t.ta.Focused() {
+				t.ta.Focus()
 			}
 		}
 
@@ -140,19 +148,19 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return t, tea.Quit
 			}
 			t.chat.Clear() // print something
-			t.viewport.SetContent(t.chat.Render(t.viewport.Width))
+			t.vp.SetContent(t.chat.Render(t.vp.Width))
 			return t, nil
 		case "enter":
-			input := strings.TrimSpace(t.textarea.Value())
-			t.textarea.Reset()
+			input := strings.TrimSpace(t.ta.Value())
+			t.ta.Reset()
 
 			if input == "" {
 				return t, nil
 			}
 
 			// Start LLM streaming
-			if t.textarea.Focused() {
-				t.textarea.Blur()
+			if t.ta.Focused() {
+				t.ta.Blur()
 			}
 			return t.promptLLM(input)
 		}
@@ -182,17 +190,17 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return t, nil
 			}
 
-			textareaFocused := t.textarea.Focused()
+			textareaFocused := t.ta.Focused()
 			if zone.Get("chatViewport").InBounds(msg) {
 				if t.chat.HistoryLen() == 0 {
 					break
 				}
 				if textareaFocused {
-					t.textarea.Blur() // TODO: need to collapse it as well
+					t.ta.Blur() // TODO: need to collapse it as well
 				}
 				if time.Since(t.lastLeftClick) < 300*time.Millisecond {
-					selectedLine := max((msg.Y+t.viewport.YOffset)-t.viewport.Height/2, 0)              // line of text user clicked
-					err := os.WriteFile(t.pagerTempfile, []byte(t.chat.Render(t.viewport.Width)), 0644) // should be its own tea.Msg?
+					selectedLine := max((msg.Y+t.vp.YOffset)-t.vp.Height/2, 0)                    // line of text user clicked
+					err := os.WriteFile(t.pagerTempfile, []byte(t.chat.Render(t.vp.Width)), 0644) // should be its own tea.Msg?
 					if err != nil {
 						return t, func() tea.Msg {
 							return pagerError{err: err}
@@ -234,7 +242,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			} else if zone.Get("promptInput").InBounds(msg) {
 				if !textareaFocused {
-					t.textarea.Focus()
+					t.ta.Focus()
 				}
 			}
 		}
@@ -250,9 +258,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			t.chat.CurrentResponse.ResponseContent.WriteString(msg.Content)
 		}
-		t.viewport.SetContent(t.chat.Render(t.viewport.Width))
+		t.vp.SetContent(t.chat.Render(t.vp.Width))
 		if !t.preventScrollToBottom {
-			t.viewport.GotoBottom()
+			t.vp.GotoBottom()
 		}
 		return t, t.waitForNextChunk
 
@@ -268,14 +276,14 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		t.chat.AddResponse()
 
-		t.viewport.SetContent(t.chat.Render(t.viewport.Width))
+		t.vp.SetContent(t.chat.Render(t.vp.Width))
 
 		if !t.preventScrollToBottom {
-			t.viewport.GotoBottom()
+			t.vp.GotoBottom()
 		}
 		t.preventScrollToBottom = false
-		if !t.textarea.Focused() {
-			t.textarea.Focus()
+		if !t.ta.Focused() {
+			t.ta.Focus()
 		}
 		return t, nil
 
@@ -290,40 +298,42 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pagerError:
 		pagerErr := msg.err.Error()
 		if pagerErr != "exit status 2" {
-			t.textarea.InsertString(fmt.Sprintf("Pager Error: %s\n", pagerErr))
+			t.ta.InsertString(fmt.Sprintf("Pager Error: %s\n", pagerErr))
 		}
 		return t, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, t.removeTempFile)
 
 	case tea.WindowSizeMsg:
 		headerHeight := lipgloss.Height(t.headerView())
-		verticalMarginHeight := headerHeight + t.textarea.Height()
+		verticalMarginHeight := headerHeight + t.ta.Height()
 		markdownWidth := int(float64(msg.Width) * styles.RESPONSE_WIDTH_PROPORTION)
 
+		// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 		if !t.ready {
-			t.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
-			t.viewport.YPosition = headerHeight
-			t.viewport.MouseWheelDelta = 2
+			t.vp = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
+			t.vp.YPosition = headerHeight
+			t.vp.MouseWheelDelta = 2
 			t.chat.Markdown.SetWidthImmediate(markdownWidth)
-			t.viewport.SetContent(t.chat.Render(msg.Width))
-			t.viewport.GotoBottom()
-			t.textarea.SetWidth(msg.Width - styles.H_PADDING)
+			t.vp.SetContent(t.chat.Render(msg.Width))
+			t.vp.GotoBottom()
+			t.ta.SetWidth(msg.Width - styles.H_PADDING)
 			t.ready = true
 		} else {
-			t.viewport.Width = msg.Width
-			t.viewport.Height = msg.Height - verticalMarginHeight
+			t.vp.Width = msg.Width
+			t.vp.Height = msg.Height - verticalMarginHeight
 
 			// TODO: here, the markdown renderer width is not updating before rendering happens. then the
 			// viewport resize happens, still before the renderer changes width. consider forcing these to be in order
 			// for smoother resizing
 			t.chat.Markdown.SetWidth(markdownWidth)
 			// t.md.SetWidthImmediate(msg.Width)
-			t.textarea.SetWidth(msg.Width - styles.H_PADDING)
-			t.viewport.SetContent(t.chat.Render(msg.Width))
+			t.ta.SetWidth(msg.Width - styles.H_PADDING)
+			t.vp.SetContent(t.chat.Render(msg.Width))
 		}
 	}
 
 	// ensure we aren't returning nil above these lines and therefore blocking messages to these models
-	t.textarea, tiCmd = t.textarea.Update(msg)
+	t.ta, tiCmd = t.ta.Update(msg)
+	t.spinner, sCmd = t.spinner.Update(msg)
 
 	// prevent movement keys from scrolling the viewport
 	switch msg := msg.(type) {
@@ -333,15 +343,15 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 	default:
-		t.viewport, vpCmd = t.viewport.Update(msg)
+		t.vp, vpCmd = t.vp.Update(msg)
 	}
-	return t, tea.Batch(tiCmd, vpCmd)
+	return t, tea.Batch(tiCmd, vpCmd, sCmd)
 }
 
 func (t *TUI) removeTempFile() tea.Msg {
 	err := os.Remove(t.pagerTempfile)
 	if err != nil {
-		t.textarea.InsertString(fmt.Sprintf("Error deleting tempfile: %e\n", err))
+		t.ta.InsertString(fmt.Sprintf("Error deleting tempfile: %e\n", err))
 	}
 	return nil
 }
@@ -355,11 +365,11 @@ func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	}
 
 	t.chat.AddPrompt(prompt)
-	t.viewport.SetContent(t.chat.Render(t.viewport.Width))
-	t.viewport.GotoBottom()
+	t.vp.SetContent(t.chat.Render(t.vp.Width))
+	t.vp.GotoBottom()
 
 	return t, tea.Batch(
-		// m.spinner.Tick,
+		t.spinner.Tick,
 		func() tea.Msg {
 			return models.StreamPromptCompletion(t.model, prompt, t.enableReasoning, t.responseChan)
 		},
@@ -384,18 +394,20 @@ func (t *TUI) View() string {
 	return zone.Scan(
 		fmt.Sprintf("%s\n%s\n%s",
 			t.headerView(),
-			zone.Mark("chatViewport", t.viewport.View()),
-			zone.Mark("promptInput", t.textarea.View())),
+			zone.Mark("chatViewport", t.vp.View()),
+			zone.Mark("promptInput", t.ta.View())),
 	)
 }
 
 func (t *TUI) headerView() string {
-	leftText := "ducky"
+	var leftText string
 	rightText := models.GetModelId(t.model)
 	if t.isStreaming {
-		leftText += " (streaming...)" // TODO: loading spinner
+		leftText = t.spinner.View()
+	} else {
+		leftText = "ducky"
 	}
-	maxWidth := t.viewport.Width - styles.HEADER_R_PADDING
+	maxWidth := t.vp.Width - styles.HEADER_R_PADDING
 	titleTextWidth := lipgloss.Width(leftText) + lipgloss.Width(rightText) + 2 // the two border chars
 	spacing := strings.Repeat(" ", max(5, maxWidth-titleTextWidth))
 

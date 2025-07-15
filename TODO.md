@@ -50,6 +50,34 @@ Preset config options to use for the chat
 - figure out showing them in pager without truncated line symbol (add H_PADDING in View function instead of in RenderHistory so text is always less wide than text+Mark status bar width)
 - save them to DB
 
+
+#### Selection/Copying:
+##### Problem:
+tmux offers the `copy-mode` command (`LEADER + [`), which takes control away from the application to allow selecting and copying. I could invoke this command instead of `less` on double-click, but copying more than what is currently on-screen would not be possible because tmux would scroll back in the history, above the application. This is also a problem with `less`, as terminal/tmux is still handling mouse events, so scrolling up while copying goes up in the terminal history as well.
+
+##### Solution 1:
+Use $EDITOR instead of pager and assume people know how to copy text in their editor and up to them to enable syntax highlighting for it
+##### Solution 2:
+manually impl text selection and copying:
+
+Vars:
+- `vpY = msg.Y - headerView.Height`
+- `trueLineNo = vpY + vp.YOffset`
+
+Impl:
+- use `trueLineNo` to record start, end Line Number of selection mouse drag
+  - if `vpY <= 0` invoke scrollUp by `vp.MouseDelta`
+- denote selected lines with a 1char-wide left sidebar
+- send start, end lines (ordered from least to greatest) to ChatHistory to getSelectedLines
+- using ChatModel.history and associated styles.constants.V_PADDING to know which prompts/responses are being selected and exactly which lines and grab the selected text
+- remove escape codes and add to clipboard
+
+Notes:
+- bubbletea v2 will add control for mouse cursor to make this look nicer
+
+##### Solution 3:
+Do both, opening editor on doubleclick and dragging does native select
+
 #### DX:
 - bubbletea v2
 - add pre-commit hooks

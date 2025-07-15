@@ -5,20 +5,29 @@ import "github.com/charmbracelet/lipgloss"
 type TUIStylesStruct struct {
 	TitleBar,
 	PromptText,
+	Spinner,
 	TextAreaCursor lipgloss.Style
 }
+
+const (
+	ColorPrimary   = lipgloss.Color("86")      // cream
+	ColorSecondary = lipgloss.Color("#CCD4FF") // light blue
+)
 
 // makeStyles declares formatting for text throughout the TUI
 var TUIStyles = TUIStylesStruct{
 	TitleBar: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("86")). // cream
+		Foreground(ColorPrimary).
 		Faint(true).
 		Bold(true).
 		BorderStyle(lipgloss.RoundedBorder()).
 		Padding(0, H_PADDING),
 
 	PromptText: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#CCD4FF")), // light blue
+		Foreground(ColorSecondary),
+
+	Spinner: lipgloss.NewStyle().
+		Foreground(ColorPrimary),
 
 	TextAreaCursor: lipgloss.NewStyle(),
 }
