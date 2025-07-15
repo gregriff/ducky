@@ -20,7 +20,7 @@ import (
 )
 
 type TUI struct {
-	styles *styles.TUIStylesStruct
+	// styles *styles.TUIStylesStruct
 
 	// user args TODO: combine these into a PromptContext struct (and add a context._), along with isStreaming + isReasoning?
 	model           models.LLM
@@ -29,10 +29,11 @@ type TUI struct {
 	enableReasoning bool
 
 	// UI state
-	ready   bool
-	ta      textarea.Model
-	vp      viewport.Model
-	spinner spinner.Model
+	ready      bool
+	ta         textarea.Model
+	vp         viewport.Model
+	spinner    spinner.Model
+	windowSize tea.WindowSizeMsg
 
 	lastLeftClick,
 	lastManualGoToBottom time.Time
@@ -64,15 +65,13 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 	ta.Prompt = "┃ "
 	ta.CharLimit = -1
 	ta.Focus()
-	ta.SetHeight(4)
+	ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
 
 	s := spinner.New()
 	s.Spinner = spinner.Points
 	s.Style = styles.TUIStyles.Spinner
 
 	t := &TUI{
-		styles: &styles.TUIStyles,
-
 		systemPrompt:    systemPrompt,
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
@@ -159,9 +158,6 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Start LLM streaming
-			if t.ta.Focused() {
-				t.ta.Blur()
-			}
 			return t.promptLLM(input)
 		}
 
@@ -248,16 +244,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case models.StreamChunk:
-		if t.isReasoning {
-			if !msg.Reasoning {
-				t.isReasoning = false
-				t.chat.CurrentResponse.ResponseContent.WriteString(msg.Content)
-			} else {
-				t.chat.CurrentResponse.ReasoningContent.WriteString(msg.Content)
-			}
-		} else {
-			t.chat.CurrentResponse.ResponseContent.WriteString(msg.Content)
-		}
+		t.isReasoning = msg.Reasoning
+		t.chat.AccumulateStream(msg.Content, msg.Reasoning, false)
+
 		t.vp.SetContent(t.chat.Render(t.vp.Width))
 		if !t.preventScrollToBottom {
 			t.vp.GotoBottom()
@@ -272,6 +261,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		t.isStreaming = false
 		t.isReasoning = false
+		t.ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		t.chat.AddResponse()
@@ -285,10 +275,17 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !t.ta.Focused() {
 			t.ta.Focus()
 		}
-		return t, nil
+
+		// recalculate views because we've changed the textarea height
+		resizeWindow := func() tea.Msg {
+			return t.windowSize
+		}
+
+		return t, tea.Batch(textarea.Blink, resizeWindow)
 
 	case models.StreamError:
-		t.chat.CurrentResponse.ErrorContent = fmt.Sprintf("**Error:** %v", msg.ErrMsg)
+		errMsg := fmt.Sprintf("**Error:** %v", msg.ErrMsg)
+		t.chat.AccumulateStream(errMsg, false, true)
 		return t, t.waitForNextChunk // ensure last chunk is read and let chunk and complete messages handle state
 
 	case pagerExit:
@@ -303,30 +300,36 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, t.removeTempFile)
 
 	case tea.WindowSizeMsg:
+		t.windowSize = msg
+
 		headerHeight := lipgloss.Height(t.headerView())
-		verticalMarginHeight := headerHeight + t.ta.Height()
-		markdownWidth := int(float64(msg.Width) * styles.RESPONSE_WIDTH_PROPORTION)
+		textAreaHeight := t.ta.Height()
+		verticalMarginHeight := headerHeight + textAreaHeight // NOTE: if you adjust the newlines in View() this will need to change
+
+		viewportHeight := msg.Height - verticalMarginHeight
+		textAreaWidth := msg.Width - styles.H_PADDING
+		markdownWidth := int(float64(msg.Width) * styles.WIDTH_PROPORTION_RESPONSE)
 
 		// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 		if !t.ready {
-			t.vp = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
-			t.vp.YPosition = headerHeight
+			t.vp = viewport.New(msg.Width, viewportHeight)
+			// t.vp.YPosition = headerHeight
 			t.vp.MouseWheelDelta = 2
 			t.chat.Markdown.SetWidthImmediate(markdownWidth)
 			t.vp.SetContent(t.chat.Render(msg.Width))
 			t.vp.GotoBottom()
-			t.ta.SetWidth(msg.Width - styles.H_PADDING)
+			t.ta.SetWidth(textAreaWidth)
 			t.ready = true
 		} else {
 			t.vp.Width = msg.Width
-			t.vp.Height = msg.Height - verticalMarginHeight
+			t.vp.Height = viewportHeight
 
 			// TODO: here, the markdown renderer width is not updating before rendering happens. then the
 			// viewport resize happens, still before the renderer changes width. consider forcing these to be in order
 			// for smoother resizing
 			t.chat.Markdown.SetWidth(markdownWidth)
 			// t.md.SetWidthImmediate(msg.Width)
-			t.ta.SetWidth(msg.Width - styles.H_PADDING)
+			t.ta.SetWidth(textAreaWidth)
 			t.vp.SetContent(t.chat.Render(msg.Width))
 		}
 	}
@@ -364,15 +367,28 @@ func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 		t.isReasoning = true
 	}
 
+	if t.ta.Focused() {
+		t.ta.Blur()
+	}
+	t.ta.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
+
 	t.chat.AddPrompt(prompt)
 	t.vp.SetContent(t.chat.Render(t.vp.Width))
 	t.vp.GotoBottom()
 
+	// recalculate view because we've changed the textarea height
+	triggerResize := func() tea.Msg {
+		return t.windowSize
+	}
+
+	beginStreaming := func() tea.Msg {
+		return models.StreamPromptCompletion(t.model, prompt, t.enableReasoning, t.responseChan)
+	}
+
 	return t, tea.Batch(
 		t.spinner.Tick,
-		func() tea.Msg {
-			return models.StreamPromptCompletion(t.model, prompt, t.enableReasoning, t.responseChan)
-		},
+		triggerResize,
+		beginStreaming,
 		t.waitForNextChunk,
 	)
 }
@@ -392,7 +408,7 @@ func (t *TUI) View() string {
 		return "Initializing..."
 	}
 	return zone.Scan(
-		fmt.Sprintf("%s\n%s\n%s",
+		fmt.Sprintf("%s%s\n\n%s",
 			t.headerView(),
 			zone.Mark("chatViewport", t.vp.View()),
 			zone.Mark("promptInput", t.ta.View())),
@@ -401,17 +417,17 @@ func (t *TUI) View() string {
 
 func (t *TUI) headerView() string {
 	var leftText string
-	rightText := models.GetModelId(t.model)
 	if t.isStreaming {
 		leftText = t.spinner.View()
 	} else {
 		leftText = "ducky"
 	}
+	rightText := models.GetModelId(t.model)
 	maxWidth := t.vp.Width - styles.HEADER_R_PADDING
 	titleTextWidth := lipgloss.Width(leftText) + lipgloss.Width(rightText) + 2 // the two border chars
 	spacing := strings.Repeat(" ", max(5, maxWidth-titleTextWidth))
 
-	return t.styles.TitleBar.Width(max(0, maxWidth)).
+	return styles.TUIStyles.TitleBar.Width(max(0, maxWidth)).
 		Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
 
 }
