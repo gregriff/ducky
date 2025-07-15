@@ -32,7 +32,8 @@ type TUI struct {
 	textarea textarea.Model
 	viewport viewport.Model
 
-	lastLeftClick time.Time
+	lastLeftClick,
+	lastManualGoToBottom time.Time
 	pagerTempfile string
 
 	// Chat state
@@ -95,7 +96,7 @@ func (t *TUI) Start() {
 
 // Init performs initial IO.
 func (t *TUI) Init() tea.Cmd {
-	return tea.Batch(tea.SetWindowTitle("GPT-CLI"), textarea.Blink)
+	return tea.Batch(tea.SetWindowTitle("ducky"), textarea.Blink)
 }
 
 func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -113,6 +114,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return t, tea.Quit
 		case "esc":
 			t.viewport.GotoBottom()
+			t.lastManualGoToBottom = time.Now()
 			if !t.textarea.Focused() {
 				t.textarea.Focus()
 			}
@@ -159,6 +161,12 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseButtonWheelUp {
 			if t.isStreaming { // allow user to scroll up during streaming and keep their position
 				t.preventScrollToBottom = true
+			}
+
+			// here we don't scroll up if the user has just pressed esc. On mac, the rapid scroll events build up, and may
+			// register after the esc handler, which results in the viewport scrolling up after going to the bottom.
+			if time.Since(t.lastManualGoToBottom) < 800*time.Millisecond {
+				return t, nil
 			}
 			break
 		}
@@ -246,7 +254,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !t.preventScrollToBottom {
 			t.viewport.GotoBottom()
 		}
-		return t, t.waitForNextChunk()
+		return t, t.waitForNextChunk
 
 	// TODO: include usage data by having DoStreamPromptCompletion return this with fields?
 	case streamComplete: // responseChan guaranteed to be empty here
@@ -256,14 +264,16 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		t.isStreaming = false
 		t.isReasoning = false
-		t.preventScrollToBottom = false
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		t.chat.AddResponse()
 
 		t.viewport.SetContent(t.chat.Render(t.viewport.Width))
 
-		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
+		if !t.preventScrollToBottom {
+			t.viewport.GotoBottom()
+		}
+		t.preventScrollToBottom = false
 		if !t.textarea.Focused() {
 			t.textarea.Focus()
 		}
@@ -271,7 +281,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case models.StreamError:
 		t.chat.CurrentResponse.ErrorContent = fmt.Sprintf("**Error:** %v", msg.ErrMsg)
-		return t, t.waitForNextChunk() // ensure last chunk is read and let chunk and complete messages handle state
+		return t, t.waitForNextChunk // ensure last chunk is read and let chunk and complete messages handle state
 
 	case pagerExit:
 		// pager lets term control mouse for selecting/copying. Regain those controls and fullscreen
@@ -353,19 +363,18 @@ func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 		func() tea.Msg {
 			return models.StreamPromptCompletion(t.model, prompt, t.enableReasoning, t.responseChan)
 		},
-		t.waitForNextChunk(),
+		t.waitForNextChunk,
 	)
 }
 
 // waitForNextChunk notifies the Update function when a response chunk arrives, and also when the response is completed.
-func (t *TUI) waitForNextChunk() tea.Cmd {
-	return func() tea.Msg {
-		if chunk, ok := <-t.responseChan; ok {
-			return chunk
-		} else {
-			return streamComplete{}
-		}
+func (t *TUI) waitForNextChunk() tea.Msg {
+	if chunk, ok := <-t.responseChan; ok {
+		return chunk
+	} else {
+		return streamComplete{}
 	}
+
 }
 
 func (t *TUI) View() string {
@@ -381,7 +390,7 @@ func (t *TUI) View() string {
 }
 
 func (t *TUI) headerView() string {
-	leftText := "GPT-CLI"
+	leftText := "ducky"
 	rightText := models.GetModelId(t.model)
 	if t.isStreaming {
 		leftText += " (streaming...)" // TODO: loading spinner

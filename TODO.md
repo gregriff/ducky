@@ -4,8 +4,11 @@
 #### UI:
 - add thinking, first response blinkers
 - shrink textarea while streaming (no input allowed)
+- when textarea empty, keypad up/vim up cycles up in history. when at last char in textarea, keypad down/vim down cycles down in history if any
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
 - fix scrolling of textarea (use bubblezone to multiplex)
+- add popup command menu when holding ctrl
+- fix spacing between components
 - File uploads by drag/dropping into terminal
 
 #### Rendering:
@@ -15,16 +18,17 @@
 - make custom glamour stylesheet to render the centered H2s
 
 #### Model Support:
-- fully impl ability to switch models mid-session with a command, keeping history
+- fully impl ability to switch models mid-session with a command, keeping history. use a selector bubble
 - use contexts with streaming to cancel after 10 secs of no API response, resetting this timer if a chunk is recieved
 - impl openAI models
 
 #### Configuration:
+- use XDG_CONFIG
 - complete viper config file stuff
 - add more config options
 - add YAML file spec and put it at top of a demo-config.yaml in the repo
 - add color configs:
-  - glamour stylesheet
+  - glamour md stylesheet or at least style preset
   - pager prompt
   - UI elements
 

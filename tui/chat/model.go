@@ -64,16 +64,16 @@ func (c *ChatModel) AddPrompt(s string) {
 
 // AddResponse updates the latest ChatEntry with the data from CurrentResponse. Must be called after AddPrompt
 func (c *ChatModel) AddResponse() {
-	s := c.CurrentResponse
+	res := c.CurrentResponse
 
-	curChatEntry := &c.history[len(c.history)-1]
-	curChatEntry.reasoning = s.ReasoningContent.String()
-	curChatEntry.response = s.ResponseContent.String()
-	curChatEntry.error = s.ErrorContent
+	curEntry := &c.history[len(c.history)-1]
+	curEntry.reasoning = res.ReasoningContent.String()
+	curEntry.response = res.ResponseContent.String()
+	curEntry.error = res.ErrorContent
 
-	s.ReasoningContent.Reset()
-	s.ResponseContent.Reset()
-	s.ErrorContent = ""
+	res.ReasoningContent.Reset()
+	res.ResponseContent.Reset()
+	res.ErrorContent = ""
 }
 
 // Render returns a string of the entire chat history in markdown, wrapped to a certain width. If the vpWidth hasn't changed since the
