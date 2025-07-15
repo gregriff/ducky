@@ -107,8 +107,8 @@ func (t *TUI) Init() tea.Cmd {
 
 func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
-		tiCmd,
-		sCmd,
+		taCmd,
+		spCmd,
 		vpCmd tea.Cmd
 	)
 
@@ -304,8 +304,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.windowSize = msg
 
 		headerHeight := lipgloss.Height(t.headerView())
-		// textAreaHeight := t.ta.Height()
-		textAreaHeight := lipgloss.Height(t.ta.View())
+		textAreaHeight := t.ta.Height()
 		verticalMarginHeight := headerHeight + textAreaHeight + 1 // +1 for spacing in View()
 
 		viewportHeight := msg.Height - verticalMarginHeight
@@ -316,7 +315,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !t.ready {
 			t.vp = viewport.New(msg.Width, viewportHeight)
 			t.vp.MouseWheelDelta = 2
-			t.chat.Markdown.SetWidthImmediate(markdownWidth)
+			t.chat.Markdown.SetWidth(markdownWidth)
 			t.vp.SetContent(t.chat.Render(msg.Width))
 			t.vp.GotoBottom()
 			t.ta.SetWidth(textAreaWidth)
@@ -325,19 +324,15 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			t.vp.Width = msg.Width
 			t.vp.Height = viewportHeight
 
-			// TODO: here, the markdown renderer width is not updating before rendering happens. then the
-			// viewport resize happens, still before the renderer changes width. consider forcing these to be in order
-			// for smoother resizing
-			t.chat.Markdown.SetWidth(markdownWidth)
-			// t.md.SetWidthImmediate(msg.Width)
 			t.ta.SetWidth(textAreaWidth)
+			t.chat.Markdown.SetWidth(msg.Width)
 			t.vp.SetContent(t.chat.Render(msg.Width))
 		}
 	}
 
 	// ensure we aren't returning nil above these lines and therefore blocking messages to these models
-	t.ta, tiCmd = t.ta.Update(msg)
-	t.spinner, sCmd = t.spinner.Update(msg)
+	t.ta, taCmd = t.ta.Update(msg)
+	t.spinner, spCmd = t.spinner.Update(msg)
 
 	// prevent movement keys from scrolling the viewport
 	switch msg := msg.(type) {
@@ -349,7 +344,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	default:
 		t.vp, vpCmd = t.vp.Update(msg)
 	}
-	return t, tea.Batch(tiCmd, vpCmd, sCmd)
+	return t, tea.Batch(taCmd, vpCmd, spCmd)
 }
 
 func (t *TUI) removeTempFile() tea.Msg {
