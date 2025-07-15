@@ -125,6 +125,10 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !t.ta.Focused() {
 				t.ta.Focus()
 			}
+			t.ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
+			return t, func() tea.Msg {
+				return t.windowSize
+			}
 		}
 
 		// TODO: impl cancel response WITH CONTEXTS
@@ -262,7 +266,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		t.isStreaming = false
 		t.isReasoning = false
-		t.ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
+		// t.ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		t.chat.AddResponse()
@@ -278,11 +282,11 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// recalculate views because we've changed the textarea height
-		resizeWindow := func() tea.Msg {
-			return t.windowSize
-		}
+		// resizeWindow := func() tea.Msg {
+		// 	return t.windowSize
+		// }
 
-		return t, tea.Batch(textarea.Blink, resizeWindow)
+		return t, textarea.Blink
 
 	case models.StreamError:
 		errMsg := fmt.Sprintf("**Error:** %v", msg.ErrMsg)
@@ -332,6 +336,23 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ensure we aren't returning nil above these lines and therefore blocking messages to these models
 	t.ta, taCmd = t.ta.Update(msg)
+
+	// this will be used if we change the height below
+	taResizeCmds := tea.Batch(taCmd, textarea.Blink, func() tea.Msg {
+		return t.windowSize
+	})
+
+	// this expands the textarea if user starts typing and collapses it if they clear it
+	if t.ta.Length() > 0 {
+		if t.ta.Height() < styles.TEXTAREA_HEIGHT_NORMAL {
+			t.ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
+			taCmd = taResizeCmds
+		}
+	} else if t.ta.Height() > styles.TEXTAREA_HEIGHT_COLLAPSED {
+		t.ta.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
+		taCmd = taResizeCmds
+	}
+
 	t.spinner, spCmd = t.spinner.Update(msg)
 
 	// prevent movement keys from scrolling the viewport
