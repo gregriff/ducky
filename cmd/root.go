@@ -16,13 +16,16 @@ var cfgFile string
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "gpt-cli-go",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Short: "A minimal LLM chat interface",
+	Long: `gpt-cli-go is a terminal-based chat interface to the LLM-provider API's (Anthropic, OpenAI).
+It aims to provide a minimal feature-set with a polished UX, and supports Markdown rendering of responses.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+Keybinds:
+- Quit : ctrl+d
+- Clear History/Quit : ctrl+c
+- Scroll to Bottom : esc
+- Text Input Controls : ctrl+a,u,k,e,n,p,b,f,h,m,t,w,d
+`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
@@ -48,7 +51,7 @@ func initConfig() {
 		// TODO: use funcs from 'os' to make it work on Windows
 		viper.SetConfigName("gpt-cli")
 		viper.SetConfigType("yaml")
-		viper.AddConfigPath(home + "/.gpt-cli/")
+		viper.AddConfigPath(home + "/.config/.gpt-cli/")
 		viper.AddConfigPath(".")
 		if err := viper.ReadInConfig(); err != nil {
 			if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -67,9 +70,9 @@ func init() {
 	// will be global for your application.
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.gpt-cli-go.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/.gpt-cli/.gpt-cli-go.yaml)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

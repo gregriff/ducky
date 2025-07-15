@@ -4,7 +4,11 @@
 package models
 
 type LLM interface {
-	DoStreamPromptCompletion(prompt string, enableReasoning bool, ch chan string)
+	DoStreamPromptCompletion(
+		prompt string,
+		enableReasoning bool, // whether the user wants the model to think/reason if supported
+		responseChan chan StreamChunk,
+	) error
 	DoGetCostOfCurrentChat() float64
 	DoClearChatHistory()
 	DoGetChatHistory() []Message
@@ -12,8 +16,8 @@ type LLM interface {
 }
 
 // TODO: handle errors
-func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, ch chan string) {
-	llm.DoStreamPromptCompletion(prompt, enableReasoning, ch)
+func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, responseChan chan StreamChunk) error {
+	return llm.DoStreamPromptCompletion(prompt, enableReasoning, responseChan)
 }
 
 func GetCostOfCurrentChat(llm LLM) float64 {

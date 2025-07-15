@@ -5,12 +5,12 @@ package anthropic
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go" // imported as anthropic
 	"github.com/gregriff/gpt-cli-go/models"
 )
 
+// AnthropicModel satisfies the models.LLM interface
 type AnthropicModel struct {
 	models.BaseLLM
 	Client             anthropic.Client
@@ -41,19 +41,19 @@ func NewAnthropicModel(systemPrompt string, maxTokens int, modelName string, pas
 	}
 }
 
-func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReasoning bool, ch chan string) {
-	defer close(ch)
+func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinking bool, responseChan chan models.StreamChunk) error {
+	defer close(responseChan)
 
 	var (
 		// per-prompt properties (user will be able to change these at any time)
-		maxTokens       int64
-		thinking        anthropic.ThinkingConfigParamUnion
-		thinkingEnabled *bool
+		maxTokens         int64
+		thinking          anthropic.ThinkingConfigParamUnion
+		thinkingSupported *bool
 	)
 
 	maxTokens = int64(llm.MaxTokens)
 	fullResponseText := ""
-	if thinkingEnabled = llm.ModelConfig.Thinking; thinkingEnabled != nil && *thinkingEnabled && enableReasoning {
+	if thinkingSupported = llm.ModelConfig.Thinking; thinkingSupported != nil && *thinkingSupported && enableThinking {
 		thinking = anthropic.ThinkingConfigParamOfEnabled(maxTokens)
 		if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
 			maxTokens = 2048
@@ -78,25 +78,31 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 		event := stream.Current()
 		err := message.Accumulate(event)
 		if err != nil {
-			ch <- fmt.Sprintf("\n\n[Error: %v]", stream.Err())
+			// responseChan <- models.StreamChunk{Reasoning: false, Content: fmt.Sprintf("\n\n[Error: %v]", stream.Err())}
+
+			// TODO: format anthropic error message here
+			return models.StreamError{ErrMsg: stream.Err().Error()}
 		}
 
 		switch eventVariant := event.AsAny().(type) {
 		case anthropic.ContentBlockDeltaEvent:
 			switch deltaVariant := eventVariant.Delta.AsAny().(type) {
 			case anthropic.ThinkingDelta:
-				ch <- deltaVariant.Thinking
+				fullResponseText += deltaVariant.Thinking
+				responseChan <- models.StreamChunk{Reasoning: true, Content: deltaVariant.Thinking}
 			case anthropic.TextDelta:
 				fullResponseText += deltaVariant.Text
-				ch <- deltaVariant.Text
+				responseChan <- models.StreamChunk{Reasoning: false, Content: deltaVariant.Text}
 			case anthropic.CitationsDelta:
-				ch <- deltaVariant.Citation.DocumentTitle
+				fullResponseText += deltaVariant.Citation.CitedText
+				responseChan <- models.StreamChunk{Reasoning: false, Content: deltaVariant.Citation.CitedText}
 			}
 		}
 	}
 
 	if stream.Err() != nil {
-		ch <- fmt.Sprintf("\n\n[Error: %v]", stream.Err())
+		// responseChan <- models.StreamChunk{Reasoning: false, Content: fmt.Sprintf("\n\n[Error: %v]", stream.Err())}
+		return models.StreamError{ErrMsg: stream.Err().Error()}
 	}
 
 	// update state
@@ -105,6 +111,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableReason
 	if len(fullResponseText) > 0 {
 		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: fullResponseText})
 	}
+	return nil
 }
 
 // buildMessages takes the provider-agnostic []models.Message of the chat history and returns the Anthropic chat history data format

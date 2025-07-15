@@ -2,98 +2,120 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gregriff/gpt-cli-go/models"
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
+	chat "github.com/gregriff/gpt-cli-go/tui/chat"
+	styles "github.com/gregriff/gpt-cli-go/tui/styles"
+	zone "github.com/lrstanley/bubblezone"
 )
 
-// TODO: group some fields into sub-structs (rendererManager)
 type TUI struct {
-	model        models.LLM
-	ModelId      string
-	SystemPrompt string
-	ModelName    string
-	TotalCost    float64
-	MaxTokens    int
+	styles *styles.TUIStylesStruct
 
-	history []string
-	vars    map[string]string
+	// user args TODO: combine these into a PromptContext struct (and add a context._), along with isStreaming + isReasoning?
+	model           models.LLM
+	systemPrompt    string
+	maxTokens       int
+	enableReasoning bool
 
 	// UI state
-	styles          Styles
-	ready           bool
-	viewport        viewport.Model
-	input           string
-	chatHistory     strings.Builder
-	currentResponse strings.Builder
-	responseChan    chan string
-	isStreaming     bool
-	renderMgr       *RendererManager
+	ready    bool
+	textarea textarea.Model
+	viewport viewport.Model
+
+	lastLeftClick time.Time
+	pagerTempfile string
+
+	// Chat state
+	chat *chat.ChatModel
+	isStreaming,
+	isReasoning bool
+	responseChan chan models.StreamChunk
+
+	preventScrollToBottom bool
 }
 
 // Bubbletea messages
-type streamChunk string
 type streamComplete struct{}
-type streamError struct{ err error }
 
-func NewTUI(systemPrompt string, modelName string, maxTokens int) *TUI {
-	tui := &TUI{
-		SystemPrompt: systemPrompt,
-		ModelName:    modelName,
-		TotalCost:    0.,
-		MaxTokens:    maxTokens,
+type pagerExit struct{}
+type pagerError struct{ err error }
 
-		history: make([]string, 0),
-		vars:    make(map[string]string),
+func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUI {
+	// create and style textarea
+	ta := textarea.New()
+	ta.ShowLineNumbers = false
+	ta.KeyMap.InsertNewline.SetEnabled(false) // TODO: need this to be bound to shift+enter
+	ta.Placeholder = "Send a prompt..."
+	ta.FocusedStyle.Placeholder = styles.TUIStyles.PromptText
+	ta.FocusedStyle.CursorLine = styles.TUIStyles.TextAreaCursor
+	ta.Prompt = "┃ "
+	ta.CharLimit = -1
+	ta.Focus()
+	ta.SetHeight(4)
 
-		styles:       makeStyles(lipgloss.DefaultRenderer()),
-		responseChan: make(chan string),
-		renderMgr:    NewRendererManager(),
+	t := &TUI{
+		styles: &styles.TUIStyles,
+
+		systemPrompt:    systemPrompt,
+		maxTokens:       maxTokens,
+		enableReasoning: enableReasoning,
+
+		textarea: ta,
+
+		chat:         chat.NewChatModel(glamourStyle),
+		responseChan: make(chan models.StreamChunk),
+
+		pagerTempfile: "temp.history",
 	}
 
-	tui.initLLMClient(modelName)
-
-	// Add welcome message to chat history
-	tui.addToChat("\nCommands: `:set <var> <value>`, `:get <var>`, `:history`, `:clear`, `:exit`\n\n---\n\n")
-
-	return tui
+	t.initLLMClient(modelName)
+	return t
 }
 
 func (t *TUI) Start() {
 	p := tea.NewProgram(t,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
+		// tea.WithReportFocus(),
 	)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v", err)
 	}
 }
 
+// Init performs initial IO.
 func (t *TUI) Init() tea.Cmd {
-	return tea.SetWindowTitle("GPT-CLI")
+	return tea.Batch(tea.SetWindowTitle("GPT-CLI"), textarea.Blink)
 }
 
 func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
-		cmd  tea.Cmd
-		cmds []tea.Cmd
+		tiCmd,
+		vpCmd tea.Cmd
 	)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		keyString := msg.String()
 
-		msgString := msg.String()
-		switch msgString {
+		switch keyString {
 		case "ctrl+d":
 			return t, tea.Quit
-		case "ctrl+u":
-			t.input = ""
 		case "esc":
 			t.viewport.GotoBottom()
+			if !t.textarea.Focused() {
+				t.textarea.Focus()
+			}
 		}
 
 		// TODO: impl cancel response WITH CONTEXTS
@@ -107,206 +129,270 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// while streaming, anything below this will not be accessible
 		if t.isStreaming {
-			return t, nil
+			break
 		}
 
-		switch msg.Type {
-		case tea.KeyEnter:
-			return t.processUserInput()
-		case tea.KeyBackspace:
-			if len(t.input) > 0 {
-				t.input = t.input[:len(t.input)-1]
+		switch keyString {
+		case "ctrl+c":
+			if t.chat.HistoryLen() == 0 {
+				return t, tea.Quit
 			}
+			t.chat.Clear() // print something
+			t.viewport.SetContent(t.chat.Render(t.viewport.Width))
 			return t, nil
-		default:
-			if IsValidPromptInput(msgString) {
-				t.input += msgString
+		case "enter":
+			input := strings.TrimSpace(t.textarea.Value())
+			t.textarea.Reset()
+
+			if input == "" {
+				return t, nil
 			}
-			return t, nil
+
+			// Start LLM streaming
+			if t.textarea.Focused() {
+				t.textarea.Blur()
+			}
+			return t.promptLLM(input)
 		}
 
-	case streamChunk:
-		t.currentResponse.WriteString(string(msg))
-		t.updateViewportContent()
-		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
-		return t, waitForNextChunk(t.responseChan)
+	case tea.MouseMsg:
+		if msg.Button == tea.MouseButtonWheelUp {
+			if t.isStreaming { // allow user to scroll up during streaming and keep their position
+				t.preventScrollToBottom = true
+			}
+			break
+		}
 
-	case streamComplete:
+		// the switch below will capture this button and prevent scroll so break out
+		if msg.Button == tea.MouseButtonWheelDown {
+			break
+		}
+
+		switch msg.Action {
+		case tea.MouseActionPress: // handles all mouse EVENTS  TODO: re-evaluate for bugs
+			if t.isStreaming || msg.Button != tea.MouseButtonLeft {
+				return t, nil
+			}
+
+			textareaFocused := t.textarea.Focused()
+			if zone.Get("chatViewport").InBounds(msg) {
+				if t.chat.HistoryLen() == 0 {
+					break
+				}
+				if textareaFocused {
+					t.textarea.Blur() // TODO: need to collapse it as well
+				}
+				if time.Since(t.lastLeftClick) < 300*time.Millisecond {
+					selectedLine := max((msg.Y+t.viewport.YOffset)-t.viewport.Height/2, 0)              // line of text user clicked
+					err := os.WriteFile(t.pagerTempfile, []byte(t.chat.Render(t.viewport.Width)), 0644) // should be its own tea.Msg?
+					if err != nil {
+						return t, func() tea.Msg {
+							return pagerError{err: err}
+						}
+					}
+					cmd := exec.Command(
+						"less",
+						fmt.Sprintf("+%d", selectedLine),
+						"--use-color",       // display ANSI colors
+						"--chop-long-lines", // dont wrap long lines
+						"--quit-on-intr",    // quit on ctrl+c
+						"--incsearch",       // incremental search
+						fmt.Sprintf("--prompt=%s", `?eEOF ?m(response %i of %m).`),
+						// "--color=PkY.EkY",   // set prompt and error color to black on bright yellow
+						// fmt.Sprintf("--prompt=%s", `COPY MODE | %pb\% %BB ?m(response %i of %m).`), // (section %dt/%D)
+						//
+						// STATUS COLUMN: shows marks and matches in leftmost col
+						// - width must be <= than H_PADDING or prompts will be truncated
+						// - prompt and response strings would need to have their ending character removed
+						//   to prevent less from showing truncation symbol
+						// "--status-column",   // shows marks and matches
+						// fmt.Sprintf("--status-col-width=%d", styles.H_PADDING),
+						// "--save-marks", will need this later
+						t.pagerTempfile,
+					)
+					cmd.Env = append(os.Environ(),
+						"LESSSECURE=1", // disables in-pager shell, editing, pipe etc.
+					)
+					onPagerExit := func(err error) tea.Msg {
+						if err != nil {
+							return pagerError{err: err}
+						}
+						return pagerExit{}
+					}
+					return t, tea.ExecProcess(cmd, onPagerExit)
+				} else {
+					t.lastLeftClick = time.Now()
+				}
+
+			} else if zone.Get("promptInput").InBounds(msg) {
+				if !textareaFocused {
+					t.textarea.Focus()
+				}
+			}
+		}
+
+	case models.StreamChunk:
+		if t.isReasoning {
+			if !msg.Reasoning {
+				t.isReasoning = false
+				t.chat.CurrentResponse.ResponseContent.WriteString(msg.Content)
+			} else {
+				t.chat.CurrentResponse.ReasoningContent.WriteString(msg.Content)
+			}
+		} else {
+			t.chat.CurrentResponse.ResponseContent.WriteString(msg.Content)
+		}
+		t.viewport.SetContent(t.chat.Render(t.viewport.Width))
+		if !t.preventScrollToBottom {
+			t.viewport.GotoBottom()
+		}
+		return t, t.waitForNextChunk()
+
+	// TODO: include usage data by having DoStreamPromptCompletion return this with fields?
+	case streamComplete: // responseChan guaranteed to be empty here
+		// if a StreamError occurs before response streaming begins, two waitForNextChunks will return streamComplete
+		if t.isStreaming == false {
+			return t, nil
+		}
 		t.isStreaming = false
+		t.isReasoning = false
+		t.preventScrollToBottom = false
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
-		t.addToChat(t.currentResponse.String() + "\n\n---\n\n")
-		t.currentResponse.Reset()
-		t.updateViewportContent()
+		t.chat.AddResponse()
+
+		t.viewport.SetContent(t.chat.Render(t.viewport.Width))
+
+		t.viewport.GotoBottom() // TODO: dont run this if user has scrolled up during response streaming (wants to read)
+		if !t.textarea.Focused() {
+			t.textarea.Focus()
+		}
 		return t, nil
 
-	case streamError:
-		t.isStreaming = false
-		t.addToChat(t.currentResponse.String() + "\n\n---\n\n" + fmt.Sprintf("**Error:** %v\n\n---\n\n", msg.err))
-		t.currentResponse.Reset()
-		t.updateViewportContent()
-		return t, nil
+	case models.StreamError:
+		t.chat.CurrentResponse.ErrorContent = fmt.Sprintf("**Error:** %v", msg.ErrMsg)
+		return t, t.waitForNextChunk() // ensure last chunk is read and let chunk and complete messages handle state
+
+	case pagerExit:
+		// pager lets term control mouse for selecting/copying. Regain those controls and fullscreen
+		return t, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, t.removeTempFile)
+
+	case pagerError:
+		pagerErr := msg.err.Error()
+		if pagerErr != "exit status 2" {
+			t.textarea.InsertString(fmt.Sprintf("Pager Error: %s\n", pagerErr))
+		}
+		return t, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, t.removeTempFile)
 
 	case tea.WindowSizeMsg:
 		headerHeight := lipgloss.Height(t.headerView())
-		inputHeight := 3
-		verticalMarginHeight := headerHeight + inputHeight
+		verticalMarginHeight := headerHeight + t.textarea.Height()
+		markdownWidth := int(float64(msg.Width) * styles.RESPONSE_WIDTH_PROPORTION)
 
 		if !t.ready {
 			t.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			t.viewport.YPosition = headerHeight
-			t.viewport.MouseWheelDelta = 1
-			t.renderMgr.ForceCreation(msg.Width)
-			t.updateViewportContent()
+			t.viewport.MouseWheelDelta = 2
+			t.chat.Markdown.SetWidthImmediate(markdownWidth)
+			t.viewport.SetContent(t.chat.Render(msg.Width))
 			t.viewport.GotoBottom()
+			t.textarea.SetWidth(msg.Width - styles.H_PADDING)
 			t.ready = true
 		} else {
 			t.viewport.Width = msg.Width
 			t.viewport.Height = msg.Height - verticalMarginHeight
-			t.renderMgr.SetWidth(msg.Width)
-			t.updateViewportContent()
+
+			// TODO: here, the markdown renderer width is not updating before rendering happens. then the
+			// viewport resize happens, still before the renderer changes width. consider forcing these to be in order
+			// for smoother resizing
+			t.chat.Markdown.SetWidth(markdownWidth)
+			// t.md.SetWidthImmediate(msg.Width)
+			t.textarea.SetWidth(msg.Width - styles.H_PADDING)
+			t.viewport.SetContent(t.chat.Render(msg.Width))
 		}
 	}
 
-	// Handle viewport updates
-	t.viewport, cmd = t.viewport.Update(msg)
-	cmds = append(cmds, cmd)
+	// ensure we aren't returning nil above these lines and therefore blocking messages to these models
+	t.textarea, tiCmd = t.textarea.Update(msg)
 
-	return t, tea.Batch(cmds...)
+	// prevent movement keys from scrolling the viewport
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "d", "u", "b", "j", "k":
+			break
+		}
+	default:
+		t.viewport, vpCmd = t.viewport.Update(msg)
+	}
+	return t, tea.Batch(tiCmd, vpCmd)
 }
 
-func (t *TUI) processUserInput() (tea.Model, tea.Cmd) {
-	input := strings.TrimSpace(t.input)
-	userInput := t.input
-	t.input = ""
-
-	if input == "" {
-		return t, nil
+func (t *TUI) removeTempFile() tea.Msg {
+	err := os.Remove(t.pagerTempfile)
+	if err != nil {
+		t.textarea.InsertString(fmt.Sprintf("Error deleting tempfile: %e\n", err))
 	}
+	return nil
+}
 
-	// Add user input to chat
-	t.addToChat(fmt.Sprintf("**You:** %s\n\n", userInput))
-
-	if input == ":exit" || input == ":quit" {
-		return t, tea.Quit
-	}
-
-	// Add to history
-	t.history = append(t.history, input)
-
-	// Process commands
-	if result, isCommand := t.handleCommand(input); isCommand {
-		if result != "" {
-			t.addToChat(fmt.Sprintf("```\n%s\n```\n\n---\n\n", result))
-		}
-		t.updateViewportContent()
-		t.viewport.GotoBottom()
-		return t, nil
-	}
-
-	// Start LLM streaming
-	t.responseChan = make(chan string)
+// promptLLM makes the LLM API request, handles TUI state and begins listening for the response stream
+func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
+	t.responseChan = make(chan models.StreamChunk)
 	t.isStreaming = true
-	t.addToChat("**Assistant:** ")
-	t.updateViewportContent()
+	if t.enableReasoning { // TODO: && model.supportsReasoning (make new interface func)
+		t.isReasoning = true
+	}
+
+	t.chat.AddPrompt(prompt)
+	t.viewport.SetContent(t.chat.Render(t.viewport.Width))
 	t.viewport.GotoBottom()
 
 	return t, tea.Batch(
 		// m.spinner.Tick,
-		t.streamLLMResponse(input, t.responseChan),
-		waitForNextChunk(t.responseChan),
+		func() tea.Msg {
+			return models.StreamPromptCompletion(t.model, prompt, t.enableReasoning, t.responseChan)
+		},
+		t.waitForNextChunk(),
 	)
 }
 
-func (t *TUI) handleCommand(input string) (string, bool) {
-	parts := strings.Fields(input)
-	if len(parts) == 0 || !strings.HasPrefix(parts[0], ":") {
-		return "", false
-	}
-
-	command := parts[0]
-	switch command {
-	case ":set":
-		return t.handleSet(parts), true
-	case ":get":
-		return t.handleGet(parts), true
-	case ":history":
-		return t.showHistory(), true
-	case ":clear":
-		t.history = t.history[:0]
-		t.chatHistory.Reset()
-		t.addToChat("\nHistory cleared.\n\n---\n\n")
-		return "", true
-	case ":vars":
-		return t.showVars(), true
-	default:
-		return "Unknown command", true
-	}
-}
-
-func (t *TUI) streamLLMResponse(input string, ch chan string) tea.Cmd {
-	// the below runs in a goroutine. It will immediately return, and our Update func has already queued a waitForNextChunk to
-	// receive on the responseChannel
+// waitForNextChunk notifies the Update function when a response chunk arrives, and also when the response is completed.
+func (t *TUI) waitForNextChunk() tea.Cmd {
 	return func() tea.Msg {
-		models.StreamPromptCompletion(t.model, input, true, ch)
-		return nil
-	}
-}
-
-func waitForNextChunk(ch chan string) tea.Cmd {
-	return func() tea.Msg {
-		if chunk, ok := <-ch; ok {
-			return streamChunk(chunk)
+		if chunk, ok := <-t.responseChan; ok {
+			return chunk
 		} else {
 			return streamComplete{}
 		}
 	}
 }
 
-func (t *TUI) addToChat(content string) {
-	t.chatHistory.WriteString(content)
-}
-
-// updateViewportContent renders the full chat history plus the current response in Markdown into the viewport
-func (t *TUI) updateViewportContent() {
-	fullContent := t.chatHistory.String() + t.currentResponse.String()
-	t.viewport.SetContent(t.renderMgr.Render(fullContent))
-}
-
 func (t *TUI) View() string {
 	if !t.ready {
-		return "\n  Initializing..."
+		return "Initializing..."
 	}
-
-	return fmt.Sprintf("%s\n%s\n%s", t.headerView(), t.viewport.View(), t.inputView())
+	return zone.Scan(
+		fmt.Sprintf("%s\n%s\n%s",
+			t.headerView(),
+			zone.Mark("chatViewport", t.viewport.View()),
+			zone.Mark("promptInput", t.textarea.View())),
+	)
 }
 
 func (t *TUI) headerView() string {
-	// TODO: my alacritty term is cropping the term window so i need this
-	const R_PADDING int = H_PADDING * 2
-
 	leftText := "GPT-CLI"
 	rightText := models.GetModelId(t.model)
 	if t.isStreaming {
 		leftText += " (streaming...)" // TODO: loading spinner
 	}
-	maxWidth := t.viewport.Width - R_PADDING
+	maxWidth := t.viewport.Width - styles.HEADER_R_PADDING
 	titleTextWidth := lipgloss.Width(leftText) + lipgloss.Width(rightText) + 2 // the two border chars
 	spacing := strings.Repeat(" ", max(5, maxWidth-titleTextWidth))
 
-	style := t.styles.TitleBar.Width(max(0, maxWidth))
-	return style.Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
-}
+	return t.styles.TitleBar.Width(max(0, maxWidth)).
+		Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
 
-func (t *TUI) inputView() string {
-	var prompt string
-	if t.isStreaming {
-		prompt = "Streaming response..."
-	} else {
-		prompt = fmt.Sprintf(" > %s", t.input)
-	}
-
-	return t.styles.InputArea.Render(prompt)
 }
 
 // initLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
@@ -336,9 +422,7 @@ func (t *TUI) initLLMClient(modelName string) error {
 	for _, provider := range providers {
 		if err := provider.validateFunc(modelName); err == nil {
 			// does not return an error, should it? Also, any cleanup we need to do?
-			t.model = provider.newModelFunc(t.SystemPrompt, t.MaxTokens, modelName, nil)
-			t.ModelId = models.GetModelId(t.model)
-			t.ModelName = modelName
+			t.model = provider.newModelFunc(t.systemPrompt, t.maxTokens, modelName, nil)
 			return nil
 		}
 	}

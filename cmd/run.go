@@ -4,12 +4,18 @@ Copyright © 2025 Greg Griffin <greg.griffin2@gmail.com>
 package cmd
 
 import (
+	"github.com/charmbracelet/lipgloss"
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
 	"github.com/gregriff/gpt-cli-go/tui"
 	"github.com/spf13/cobra"
+
+	zone "github.com/lrstanley/bubblezone"
 )
 
-var modelName string
+var (
+	modelName       string
+	enableReasoning bool
+)
 
 // runCmd represents the run command
 var runCmd = &cobra.Command{
@@ -32,6 +38,7 @@ func init() {
 	// and all subcommands, e.g.:
 	// runCmd.PersistentFlags().String("foo", "", "A help for foo")
 	rootCmd.PersistentFlags().StringVarP(&modelName, "model", "m", "sonnet", "model to use")
+	rootCmd.PersistentFlags().BoolVarP(&enableReasoning, "reasoning", "r", true, "enable reasoning/thinking for supported models")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
@@ -40,6 +47,14 @@ func init() {
 
 func runTUI(cmd *cobra.Command, args []string) {
 	systemPrompt := "You are a concise assistant to a software engineer"
-	tui := tui.NewTUI(systemPrompt, modelName, 2048)
+
+	// https://github.com/charmbracelet/glamour/issues/405#issuecomment-2741476242
+	glamourStyle := "light"
+	if lipgloss.HasDarkBackground() {
+		glamourStyle = "dark"
+	}
+
+	zone.NewGlobal()
+	tui := tui.NewTUI(systemPrompt, modelName, enableReasoning, 2048, glamourStyle)
 	tui.Start()
 }

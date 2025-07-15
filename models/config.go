@@ -11,3 +11,17 @@ type BaseModelConfig struct {
 func BoolPtr(b bool) *bool {
 	return &b
 }
+
+// Bubbletea messsages
+
+// StreamChunk is the type of the channel used for communication between the API response handler and bubbletea (its also a bubbletea Msg)
+type StreamChunk struct {
+	Reasoning bool
+	Content   string
+}
+
+type StreamError struct{ ErrMsg string }
+
+func (e StreamError) Error() string {
+	return e.ErrMsg
+}
