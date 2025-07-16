@@ -168,6 +168,10 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
+		// At the bottom of this update function, the textarea will take commands from the viewport if the textarea is focused.
+		// Here we define a condition where the textarea can be focused, but scroll events will be sent to the viewport instead.
+		sendScrollToViewport := m.textarea.Focused() && m.textarea.LineCount() <= m.textarea.Height()
+
 		if msg.Button == tea.MouseButtonWheelUp {
 			if m.isStreaming { // allow user to scroll up during streaming and keep their position
 				m.preventScrollToBottom = true
@@ -178,12 +182,20 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// if time.Since(m.lastManualGoToBottom) < 800*time.Millisecond {
 			// return m, nil
 			// }
-			break
+			if sendScrollToViewport {
+				m.viewport, vpCmd = m.viewport.Update(msg)
+				return m, vpCmd
+			}
+			break // let textarea handle scroll
 		}
 
 		// the switch below will capture this button and prevent scroll so break out
 		if msg.Button == tea.MouseButtonWheelDown {
-			break
+			if sendScrollToViewport {
+				m.viewport, vpCmd = m.viewport.Update(msg)
+				return m, vpCmd
+			}
+			break // let textarea handle scroll
 		}
 
 		// handles all mouse EVENTS  TODO: re-evaluate for bugs
@@ -209,8 +221,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							return pagerError{err: err}
 						}
 					}
-					defer tmpFile.Close()
-					defer os.Remove(tmpFile.Name()) // cleanup
+					m.pagerTempfile = tmpFile.Name()
 
 					selectedLine := max((msg.Y+m.viewport.YOffset)-m.viewport.Height/2, 0) // line of text user clicked
 					_, writeErr := tmpFile.WriteString(m.chat.Render(m.viewport.Width))
