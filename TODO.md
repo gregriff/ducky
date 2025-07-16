@@ -2,17 +2,13 @@
 - rename project
 
 #### UI:
-- add thinking, first response blinkers
-- shrink textarea while streaming (no input allowed)
+- fix scrolling of textarea (use bubblezone to multiplex)
 - when textarea empty, keypad up/vim up cycles up in history. when at last char in textarea, keypad down/vim down cycles down in history if any
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
-- fix scrolling of textarea (use bubblezone to multiplex)
 - add popup command menu when holding ctrl
-- fix spacing between components
 - File uploads by drag/dropping into terminal
 
 #### Rendering:
-- fix debounced markdown renderer resizing
 - Hyperlinks/citations, at least for claude models, as terminal hyperlinks: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
 - Fix Markdown H2s
 - make custom glamour stylesheet to render the centered H2s
