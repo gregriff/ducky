@@ -3,6 +3,7 @@
 
 #### UI:
 - fix scrolling of textarea (use bubblezone to multiplex)
+- move horizontal padding out into the view functions. dont pad in md renderer. add left gutter for copy?
 - when textarea empty, keypad up/vim up cycles up in history. when at last char in textarea, keypad down/vim down cycles down in history if any
 - impl discoloring/stop blinking when focus is lost
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
@@ -71,6 +72,7 @@ Impl:
 
 Notes:
 - bubbletea v2 will add control for mouse cursor to make this look nicer
+- double click a code block to copy the entire block
 
 ##### Solution 3:
 Do both, opening editor on doubleclick and dragging does native select

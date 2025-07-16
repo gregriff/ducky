@@ -20,8 +20,6 @@ import (
 )
 
 type TUIModel struct {
-	// styles *styles.TUIStylesStruct
-
 	// user args TODO: combine these into a PromptContext struct (and add a context._), along with isStreaming + isReasoning?
 	model           models.LLM
 	systemPrompt    string
@@ -35,8 +33,8 @@ type TUIModel struct {
 	spinner    spinner.Model
 	windowSize tea.WindowSizeMsg
 
-	lastLeftClick,
-	lastManualGoToBottom time.Time
+	lastLeftClick time.Time
+	// lastManualGoToBottom time.Time
 	pagerTempfile string
 
 	// Chat state
@@ -63,8 +61,7 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 	ta.FocusedStyle.Placeholder = styles.TUIStyles.PromptText
 	ta.FocusedStyle.CursorLine = styles.TUIStyles.TextAreaCursor
 	ta.Prompt = "┃ "
-	ta.CharLimit = -1
-	ta.Focus()
+	ta.CharLimit = 100_000
 	ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
 
 	s := spinner.New()
@@ -81,8 +78,6 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 
 		chat:         chat.NewChatModel(glamourStyle),
 		responseChan: make(chan models.StreamChunk),
-
-		pagerTempfile: "temp.history",
 	}
 
 	t.initLLMClient(modelName)
@@ -102,7 +97,7 @@ func (m *TUIModel) Start() {
 
 // Init performs initial IO.
 func (m *TUIModel) Init() tea.Cmd {
-	return tea.Batch(tea.SetWindowTitle("ducky"), textarea.Blink)
+	return tea.Batch(tea.SetWindowTitle("ducky"), textarea.Blink, m.textarea.Focus())
 }
 
 func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -122,14 +117,19 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+d":
 			return m, tea.Quit
 		case "esc":
-			m.viewport.GotoBottom()
-			m.lastManualGoToBottom = time.Now()
-			if !m.textarea.Focused() {
-				m.textarea.Focus()
-			}
-			m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
-			return m, func() tea.Msg {
-				return m.windowSize
+			// m.viewport.GotoBottom()
+			// m.lastManualGoToBottom = time.Now()
+			if m.textarea.Focused() {
+				if m.textarea.Length() > 0 && m.chat.HistoryLen() > 0 {
+					m.textarea.Blur()
+					// TODO: if height is > normal, set height to normal
+					cmds = append(cmds, m.redraw)
+				}
+			} else if !m.isStreaming {
+				cmds = append(cmds, m.textarea.Focus(), textarea.Blink, m.redraw)
+				// if numLines > curHeight:
+				// 		if numLines > normal, set height to min(numLines, maxHeight)
+				// 		else set height to normal
 			}
 		}
 
@@ -175,9 +175,9 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// here we don't scroll up if the user has just pressed esc. On mac, the rapid scroll events build up, and may
 			// register after the esc handler, which results in the viewport scrolling up after going to the bottom.
-			if time.Since(m.lastManualGoToBottom) < 800*time.Millisecond {
-				return m, nil
-			}
+			// if time.Since(m.lastManualGoToBottom) < 800*time.Millisecond {
+			// return m, nil
+			// }
 			break
 		}
 
@@ -202,11 +202,22 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textarea.Blur() // TODO: need to collapse it as well
 				}
 				if time.Since(m.lastLeftClick) < 300*time.Millisecond {
-					selectedLine := max((msg.Y+m.viewport.YOffset)-m.viewport.Height/2, 0)              // line of text user clicked
-					err := os.WriteFile(m.pagerTempfile, []byte(m.chat.Render(m.viewport.Width)), 0644) // should be its own tea.Msg?
+
+					tmpFile, err := os.CreateTemp(".", "pager-*")
 					if err != nil {
 						return m, func() tea.Msg {
 							return pagerError{err: err}
+						}
+					}
+					defer tmpFile.Close()
+					defer os.Remove(tmpFile.Name()) // cleanup
+
+					selectedLine := max((msg.Y+m.viewport.YOffset)-m.viewport.Height/2, 0) // line of text user clicked
+					_, writeErr := tmpFile.WriteString(m.chat.Render(m.viewport.Width))
+					// err := os.WriteFile(m.pagerTempfile, []byte(m.chat.Render(m.viewport.Width)), 0644) // should be its own tea.Msg?
+					if writeErr != nil {
+						return m, func() tea.Msg {
+							return pagerError{err: writeErr}
 						}
 					}
 					cmd := exec.Command(
@@ -217,16 +228,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						"--quit-on-intr",    // quit on ctrl+c
 						"--incsearch",       // incremental search
 						fmt.Sprintf("--prompt=%s", `?eEOF ?m(response %i of %m).`),
-						// "--color=PkY.EkY",   // set prompt and error color to black on bright yellow
-						// fmt.Sprintf("--prompt=%s", `COPY MODE | %pb\% %BB ?m(response %i of %m).`), // (section %dt/%D)
-						//
-						// STATUS COLUMN: shows marks and matches in leftmost col
-						// - width must be <= than H_PADDING or prompts will be truncated
-						// - prompt and response strings would need to have their ending character removed
-						//   to prevent less from showing truncation symbol
-						// "--status-column",   // shows marks and matches
-						// fmt.Sprintf("--status-col-width=%d", styles.H_PADDING),
-						// "--save-marks", will need this later
 						m.pagerTempfile,
 					)
 					cmd.Env = append(os.Environ(),
@@ -241,11 +242,12 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.ExecProcess(cmd, onPagerExit)
 				} else {
 					m.lastLeftClick = time.Now()
+					// cmds = append(cmds, m.redraw)
 				}
 
 			} else if zone.Get("promptInput").InBounds(msg) {
 				if !textareaFocused {
-					m.textarea.Focus()
+					cmds = append(cmds, m.textarea.Focus(), m.redraw)
 				}
 			}
 		}
@@ -279,7 +281,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.preventScrollToBottom = false
 		if !m.textarea.Focused() {
-			m.textarea.Focus()
+			cmds = append(cmds, m.textarea.Focus())
 		}
 
 		return m, textarea.Blink
@@ -365,9 +367,9 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	default:
 		m.viewport, vpCmd = m.viewport.Update(msg)
-		return m, vpCmd
+		cmds = append(cmds, vpCmd)
 	}
-	return m, nil
+	return m, tea.Batch(cmds...)
 }
 
 // redraw initiates the Window resize handler. Use it after changing the dimensions of a component to make the others update
