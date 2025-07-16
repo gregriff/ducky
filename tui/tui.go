@@ -19,7 +19,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 )
 
-type TUI struct {
+type TUIModel struct {
 	// styles *styles.TUIStylesStruct
 
 	// user args TODO: combine these into a PromptContext struct (and add a context._), along with isStreaming + isReasoning?
@@ -30,8 +30,8 @@ type TUI struct {
 
 	// UI state
 	ready      bool
-	ta         textarea.Model
-	vp         viewport.Model
+	textarea   textarea.Model
+	viewport   viewport.Model
 	spinner    spinner.Model
 	windowSize tea.WindowSizeMsg
 
@@ -54,7 +54,7 @@ type streamComplete struct{}
 type pagerExit struct{}
 type pagerError struct{ err error }
 
-func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUI {
+func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUIModel {
 	// create and style textarea
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
@@ -71,13 +71,13 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 	s.Spinner = spinner.Points
 	s.Style = styles.TUIStyles.Spinner
 
-	t := &TUI{
+	t := &TUIModel{
 		systemPrompt:    systemPrompt,
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
 
-		ta:      ta,
-		spinner: s,
+		textarea: ta,
+		spinner:  s,
 
 		chat:         chat.NewChatModel(glamourStyle),
 		responseChan: make(chan models.StreamChunk),
@@ -89,8 +89,8 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 	return t
 }
 
-func (t *TUI) Start() {
-	p := tea.NewProgram(t,
+func (m *TUIModel) Start() {
+	p := tea.NewProgram(m,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 		// tea.WithReportFocus(),
@@ -101,15 +101,17 @@ func (t *TUI) Start() {
 }
 
 // Init performs initial IO.
-func (t *TUI) Init() tea.Cmd {
+func (m *TUIModel) Init() tea.Cmd {
 	return tea.Batch(tea.SetWindowTitle("ducky"), textarea.Blink)
 }
 
-func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		taCmd,
 		spCmd,
 		vpCmd tea.Cmd
+
+		cmds []tea.Cmd
 	)
 
 	switch msg := msg.(type) {
@@ -118,16 +120,16 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch keyString {
 		case "ctrl+d":
-			return t, tea.Quit
+			return m, tea.Quit
 		case "esc":
-			t.vp.GotoBottom()
-			t.lastManualGoToBottom = time.Now()
-			if !t.ta.Focused() {
-				t.ta.Focus()
+			m.viewport.GotoBottom()
+			m.lastManualGoToBottom = time.Now()
+			if !m.textarea.Focused() {
+				m.textarea.Focus()
 			}
-			t.ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
-			return t, func() tea.Msg {
-				return t.windowSize
+			m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
+			return m, func() tea.Msg {
+				return m.windowSize
 			}
 		}
 
@@ -141,40 +143,40 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// }
 
 		// while streaming, anything below this will not be accessible
-		if t.isStreaming {
+		if m.isStreaming {
 			break
 		}
 
 		switch keyString {
 		case "ctrl+c":
-			if t.chat.HistoryLen() == 0 {
-				return t, tea.Quit
+			if m.chat.HistoryLen() == 0 {
+				return m, tea.Quit
 			}
-			t.chat.Clear() // print something
-			t.vp.SetContent(t.chat.Render(t.vp.Width))
-			return t, nil
+			m.chat.Clear() // print something
+			m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+			return m, nil
 		case "enter":
-			input := strings.TrimSpace(t.ta.Value())
-			t.ta.Reset()
+			input := strings.TrimSpace(m.textarea.Value())
+			m.textarea.Reset()
 
 			if input == "" {
-				return t, nil
+				return m, nil
 			}
 
 			// Start LLM streaming
-			return t.promptLLM(input)
+			return m.promptLLM(input)
 		}
 
 	case tea.MouseMsg:
 		if msg.Button == tea.MouseButtonWheelUp {
-			if t.isStreaming { // allow user to scroll up during streaming and keep their position
-				t.preventScrollToBottom = true
+			if m.isStreaming { // allow user to scroll up during streaming and keep their position
+				m.preventScrollToBottom = true
 			}
 
 			// here we don't scroll up if the user has just pressed esc. On mac, the rapid scroll events build up, and may
 			// register after the esc handler, which results in the viewport scrolling up after going to the bottom.
-			if time.Since(t.lastManualGoToBottom) < 800*time.Millisecond {
-				return t, nil
+			if time.Since(m.lastManualGoToBottom) < 800*time.Millisecond {
+				return m, nil
 			}
 			break
 		}
@@ -187,23 +189,23 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// handles all mouse EVENTS  TODO: re-evaluate for bugs
 		switch msg.Action {
 		case tea.MouseActionRelease:
-			if t.isStreaming || msg.Button != tea.MouseButtonLeft {
-				return t, nil
+			if m.isStreaming || msg.Button != tea.MouseButtonLeft {
+				return m, nil
 			}
 
-			textareaFocused := t.ta.Focused()
+			textareaFocused := m.textarea.Focused()
 			if zone.Get("chatViewport").InBounds(msg) {
-				if t.chat.HistoryLen() == 0 {
+				if m.chat.HistoryLen() == 0 {
 					break
 				}
 				if textareaFocused {
-					t.ta.Blur() // TODO: need to collapse it as well
+					m.textarea.Blur() // TODO: need to collapse it as well
 				}
-				if time.Since(t.lastLeftClick) < 300*time.Millisecond {
-					selectedLine := max((msg.Y+t.vp.YOffset)-t.vp.Height/2, 0)                    // line of text user clicked
-					err := os.WriteFile(t.pagerTempfile, []byte(t.chat.Render(t.vp.Width)), 0644) // should be its own tea.Msg?
+				if time.Since(m.lastLeftClick) < 300*time.Millisecond {
+					selectedLine := max((msg.Y+m.viewport.YOffset)-m.viewport.Height/2, 0)              // line of text user clicked
+					err := os.WriteFile(m.pagerTempfile, []byte(m.chat.Render(m.viewport.Width)), 0644) // should be its own tea.Msg?
 					if err != nil {
-						return t, func() tea.Msg {
+						return m, func() tea.Msg {
 							return pagerError{err: err}
 						}
 					}
@@ -225,7 +227,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// "--status-column",   // shows marks and matches
 						// fmt.Sprintf("--status-col-width=%d", styles.H_PADDING),
 						// "--save-marks", will need this later
-						t.pagerTempfile,
+						m.pagerTempfile,
 					)
 					cmd.Env = append(os.Environ(),
 						"LESSSECURE=1", // disables in-pager shell, editing, pipe etc.
@@ -236,79 +238,79 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						return pagerExit{}
 					}
-					return t, tea.ExecProcess(cmd, onPagerExit)
+					return m, tea.ExecProcess(cmd, onPagerExit)
 				} else {
-					t.lastLeftClick = time.Now()
+					m.lastLeftClick = time.Now()
 				}
 
 			} else if zone.Get("promptInput").InBounds(msg) {
 				if !textareaFocused {
-					t.ta.Focus()
+					m.textarea.Focus()
 				}
 			}
 		}
 
 	case models.StreamChunk:
-		t.isReasoning = msg.Reasoning
-		t.chat.AccumulateStream(msg.Content, msg.Reasoning, false)
+		m.isReasoning = msg.Reasoning
+		m.chat.AccumulateStream(msg.Content, msg.Reasoning, false)
 
-		t.vp.SetContent(t.chat.Render(t.vp.Width))
-		if !t.preventScrollToBottom {
-			t.vp.GotoBottom()
+		m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+		if !m.preventScrollToBottom {
+			m.viewport.GotoBottom()
 		}
-		return t, t.waitForNextChunk
+		return m, m.waitForNextChunk
 
 	// TODO: include usage data by having DoStreamPromptCompletion return this with fields?
 	case streamComplete: // responseChan guaranteed to be empty here
 		// if a StreamError occurs before response streaming begins, two waitForNextChunks will return streamComplete
-		if t.isStreaming == false {
-			return t, nil
+		if m.isStreaming == false {
+			return m, nil
 		}
-		t.isStreaming = false
-		t.isReasoning = false
-		// t.ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
+		m.isStreaming = false
+		m.isReasoning = false
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
-		t.chat.AddResponse()
+		m.chat.AddResponse()
 
-		t.vp.SetContent(t.chat.Render(t.vp.Width))
+		m.viewport.SetContent(m.chat.Render(m.viewport.Width))
 
-		if !t.preventScrollToBottom {
-			t.vp.GotoBottom()
+		if !m.preventScrollToBottom {
+			m.viewport.GotoBottom()
 		}
-		t.preventScrollToBottom = false
-		if !t.ta.Focused() {
-			t.ta.Focus()
+		m.preventScrollToBottom = false
+		if !m.textarea.Focused() {
+			m.textarea.Focus()
 		}
 
-		// recalculate views because we've changed the textarea height
-		// resizeWindow := func() tea.Msg {
-		// 	return t.windowSize
-		// }
-
-		return t, textarea.Blink
+		return m, textarea.Blink
 
 	case models.StreamError:
 		errMsg := fmt.Sprintf("**Error:** %v", msg.ErrMsg)
-		t.chat.AccumulateStream(errMsg, false, true)
-		return t, t.waitForNextChunk // ensure last chunk is read and let chunk and complete messages handle state
+		m.chat.AccumulateStream(errMsg, false, true)
+		return m, m.waitForNextChunk // ensure last chunk is read and let chunk and complete messages handle state
+
+	case spinner.TickMsg:
+		if m.isStreaming {
+			m.spinner, spCmd = m.spinner.Update(msg)
+		}
+		return m, spCmd
 
 	case pagerExit:
 		// pager lets term control mouse for selecting/copying. Regain those controls and fullscreen
-		return t, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, t.removeTempFile)
+		return m, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, m.removeTempFile)
 
 	case pagerError:
 		pagerErr := msg.err.Error()
 		if pagerErr != "exit status 2" {
-			t.ta.InsertString(fmt.Sprintf("Pager Error: %s\n", pagerErr))
+			m.textarea.InsertString(fmt.Sprintf("Pager Error: %s\n", pagerErr))
 		}
-		return t, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, t.removeTempFile)
+		return m, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, m.removeTempFile)
 
 	case tea.WindowSizeMsg:
-		t.windowSize = msg
+		m.windowSize = msg
 
-		headerHeight := lipgloss.Height(t.headerView())
-		textAreaHeight := t.ta.Height()
+		headerHeight := lipgloss.Height(m.headerView())
+		textAreaHeight := m.textarea.Height()
 		verticalMarginHeight := headerHeight + textAreaHeight + 1 // +1 for spacing in View()
 
 		viewportHeight := msg.Height - verticalMarginHeight
@@ -316,44 +318,38 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		markdownWidth := int(float64(msg.Width) * styles.WIDTH_PROPORTION_RESPONSE)
 
 		// TODO: should be able to move this into constructor, and style Viewport with vp.Style
-		if !t.ready {
-			t.vp = viewport.New(msg.Width, viewportHeight)
-			t.vp.MouseWheelDelta = 2
-			t.chat.Markdown.SetWidth(markdownWidth)
-			t.vp.SetContent(t.chat.Render(msg.Width))
-			t.vp.GotoBottom()
-			t.ta.SetWidth(textAreaWidth)
-			t.ready = true
+		if !m.ready {
+			m.viewport = viewport.New(msg.Width, viewportHeight)
+			m.viewport.MouseWheelDelta = 2
+			m.chat.Markdown.SetWidth(markdownWidth)
+			m.viewport.SetContent(m.chat.Render(msg.Width))
+			m.viewport.GotoBottom()
+			m.textarea.SetWidth(textAreaWidth)
+			m.ready = true
 		} else {
-			t.vp.Width = msg.Width
-			t.vp.Height = viewportHeight
+			m.viewport.Width = msg.Width
+			m.viewport.Height = viewportHeight
 
-			t.ta.SetWidth(textAreaWidth)
-			t.chat.Markdown.SetWidth(msg.Width)
-			t.vp.SetContent(t.chat.Render(msg.Width))
+			m.textarea.SetWidth(textAreaWidth)
+			m.chat.Markdown.SetWidth(msg.Width)
+			m.viewport.SetContent(m.chat.Render(msg.Width))
 		}
 	}
 
 	// ensure we aren't returning nil above these lines and therefore blocking messages to these models
-	t.ta, taCmd = t.ta.Update(msg)
-
-	// this will be used if we change the height below
-	taResizeCmds := tea.Batch(taCmd, textarea.Blink, func() tea.Msg {
-		return t.windowSize
-	})
+	m.textarea, taCmd = m.textarea.Update(msg)
 
 	// this expands the textarea if user starts typing and collapses it if they clear it
-	if t.ta.Length() > 0 {
-		if t.ta.Height() < styles.TEXTAREA_HEIGHT_NORMAL {
-			t.ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
-			taCmd = taResizeCmds
+	expanded, collapsed := styles.TEXTAREA_HEIGHT_NORMAL, styles.TEXTAREA_HEIGHT_COLLAPSED
+	if m.textarea.Length() > 0 {
+		if m.textarea.Height() < expanded {
+			m.textarea.SetHeight(expanded)
+			cmds = append(cmds, m.redraw, textarea.Blink)
 		}
-	} else if t.ta.Height() > styles.TEXTAREA_HEIGHT_COLLAPSED {
-		t.ta.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
-		taCmd = taResizeCmds
+	} else if m.textarea.Height() > collapsed {
+		m.textarea.SetHeight(collapsed)
+		cmds = append(cmds, m.redraw, textarea.Blink)
 	}
-
-	t.spinner, spCmd = t.spinner.Update(msg)
 
 	// prevent movement keys from scrolling the viewport
 	switch msg := msg.(type) {
@@ -363,56 +359,57 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 	default:
-		t.vp, vpCmd = t.vp.Update(msg)
+		m.viewport, vpCmd = m.viewport.Update(msg)
 	}
-	return t, tea.Batch(taCmd, vpCmd, spCmd)
+	cmds = append(cmds, taCmd, vpCmd)
+	return m, tea.Batch(cmds...)
 }
 
-func (t *TUI) removeTempFile() tea.Msg {
-	err := os.Remove(t.pagerTempfile)
+// redraw initiates the Window resize handler. Use it after changing the dimensions of a component to make the others update
+func (m *TUIModel) redraw() tea.Msg {
+	return m.windowSize
+}
+
+func (m *TUIModel) removeTempFile() tea.Msg {
+	err := os.Remove(m.pagerTempfile)
 	if err != nil {
-		t.ta.InsertString(fmt.Sprintf("Error deleting tempfile: %e\n", err))
+		m.textarea.InsertString(fmt.Sprintf("Error deleting tempfile: %e\n", err))
 	}
 	return nil
 }
 
 // promptLLM makes the LLM API request, handles TUI state and begins listening for the response stream
-func (t *TUI) promptLLM(prompt string) (tea.Model, tea.Cmd) {
-	t.responseChan = make(chan models.StreamChunk)
-	t.isStreaming = true
-	if t.enableReasoning { // TODO: && model.supportsReasoning (make new interface func)
-		t.isReasoning = true
+func (m *TUIModel) promptLLM(prompt string) (tea.Model, tea.Cmd) {
+	m.responseChan = make(chan models.StreamChunk)
+	m.isStreaming = true
+	if m.enableReasoning { // TODO: && model.supportsReasoning (make new interface func)
+		m.isReasoning = true
 	}
 
-	if t.ta.Focused() {
-		t.ta.Blur()
+	if m.textarea.Focused() {
+		m.textarea.Blur()
 	}
-	t.ta.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
 
-	t.chat.AddPrompt(prompt)
-	t.vp.SetContent(t.chat.Render(t.vp.Width))
-	t.vp.GotoBottom()
-
-	// recalculate view because we've changed the textarea height
-	triggerResize := func() tea.Msg {
-		return t.windowSize
-	}
+	m.chat.AddPrompt(prompt)
+	m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+	m.viewport.GotoBottom()
+	m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
 
 	beginStreaming := func() tea.Msg {
-		return models.StreamPromptCompletion(t.model, prompt, t.enableReasoning, t.responseChan)
+		return models.StreamPromptCompletion(m.model, prompt, m.enableReasoning, m.responseChan)
 	}
 
-	return t, tea.Batch(
-		t.spinner.Tick,
-		triggerResize,
+	return m, tea.Batch(
+		m.spinner.Tick,
+		m.redraw, // recalculate view because we've changed the textarea height
 		beginStreaming,
-		t.waitForNextChunk,
+		m.waitForNextChunk,
 	)
 }
 
 // waitForNextChunk notifies the Update function when a response chunk arrives, and also when the response is completed.
-func (t *TUI) waitForNextChunk() tea.Msg {
-	if chunk, ok := <-t.responseChan; ok {
+func (m *TUIModel) waitForNextChunk() tea.Msg {
+	if chunk, ok := <-m.responseChan; ok {
 		return chunk
 	} else {
 		return streamComplete{}
@@ -420,30 +417,30 @@ func (t *TUI) waitForNextChunk() tea.Msg {
 
 }
 
-func (t *TUI) View() string {
-	if !t.ready {
+func (m *TUIModel) View() string {
+	if !m.ready {
 		return "Initializing..."
 	}
 	// NOTE: if you change this you need to change code in the window resize event handler
 	spacing := "\n"
 	return zone.Scan(
 		fmt.Sprintf("%s\n%s\n%s", // NOTE: newlines needed between every component placed vertically (so they're not sidebyside and wrapped)
-			t.headerView(),
-			zone.Mark("chatViewport", t.vp.View()),
-			zone.Mark("promptInput", spacing+t.ta.View()),
+			m.headerView(),
+			zone.Mark("chatViewport", m.viewport.View()),
+			zone.Mark("promptInput", spacing+m.textarea.View()),
 		),
 	)
 }
 
-func (t *TUI) headerView() string {
+func (m *TUIModel) headerView() string {
 	var leftText string
-	if t.isStreaming {
-		leftText = t.spinner.View()
+	if m.isStreaming {
+		leftText = m.spinner.View()
 	} else {
 		leftText = "ducky"
 	}
-	rightText := models.GetModelId(t.model)
-	maxWidth := t.vp.Width - styles.HEADER_R_PADDING
+	rightText := models.GetModelId(m.model)
+	maxWidth := m.viewport.Width - styles.HEADER_R_PADDING
 	titleTextWidth := lipgloss.Width(leftText) + lipgloss.Width(rightText) + 2 // the two border chars
 	spacing := strings.Repeat(" ", max(5, maxWidth-titleTextWidth))
 
@@ -454,7 +451,7 @@ func (t *TUI) headerView() string {
 
 // initLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
 // in order to switch between LLMs while preserving message history
-func (t *TUI) initLLMClient(modelName string) error {
+func (m *TUIModel) initLLMClient(modelName string) error {
 	// var pastMessages []models.Message
 	// if t.model != nil {
 	// pastMessages = t.model.DoGetChatHistory()
@@ -479,7 +476,7 @@ func (t *TUI) initLLMClient(modelName string) error {
 	for _, provider := range providers {
 		if err := provider.validateFunc(modelName); err == nil {
 			// does not return an error, should it? Also, any cleanup we need to do?
-			t.model = provider.newModelFunc(t.systemPrompt, t.maxTokens, modelName, nil)
+			m.model = provider.newModelFunc(m.systemPrompt, m.maxTokens, modelName, nil)
 			return nil
 		}
 	}

@@ -4,6 +4,7 @@
 #### UI:
 - fix scrolling of textarea (use bubblezone to multiplex)
 - when textarea empty, keypad up/vim up cycles up in history. when at last char in textarea, keypad down/vim down cycles down in history if any
+- impl discoloring/stop blinking when focus is lost
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
 - add popup command menu when holding ctrl
 - File uploads by drag/dropping into terminal
