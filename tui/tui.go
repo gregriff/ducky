@@ -223,9 +223,14 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.pagerTempfile = tmpFile.Name()
 
-					selectedLine := max((msg.Y+m.viewport.YOffset)-m.viewport.Height/2, 0) // line of text user clicked
+					// somehow this whole chunk cancels out to the calc below...
+					// headerHeight := lipgloss.Height(m.headerView())
+					// lineNumber := msg.Y - headerHeight + m.viewport.YOffset
+					// lineNumber = lineNumber - (msg.Y - headerHeight) - 2
+
+					// calculate the line Number clicked to open the pager in the exact same position as what is on screen
+					selectedLine := max(m.viewport.YOffset-2, 0) // I don't know where the 2 comes from
 					_, writeErr := tmpFile.WriteString(m.chat.Render(m.viewport.Width))
-					// err := os.WriteFile(m.pagerTempfile, []byte(m.chat.Render(m.viewport.Width)), 0644) // should be its own tea.Msg?
 					if writeErr != nil {
 						return m, func() tea.Msg {
 							return pagerError{err: writeErr}
