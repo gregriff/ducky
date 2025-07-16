@@ -334,21 +334,26 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.chat.Markdown.SetWidth(msg.Width)
 			m.viewport.SetContent(m.chat.Render(msg.Width))
 		}
+		// m.textarea.MaxHeight = viewportHeight / 2
 	}
 
-	// ensure we aren't returning nil above these lines and therefore blocking messages to these models
-	m.textarea, taCmd = m.textarea.Update(msg)
+	if m.textarea.Focused() {
+		// ensure we aren't returning nil above these lines and therefore blocking messages to these models
+		m.textarea, taCmd = m.textarea.Update(msg)
+		cmds = append(cmds, taCmd)
 
-	// this expands the textarea if user starts typing and collapses it if they clear it
-	expanded, collapsed := styles.TEXTAREA_HEIGHT_NORMAL, styles.TEXTAREA_HEIGHT_COLLAPSED
-	if m.textarea.Length() > 0 {
-		if m.textarea.Height() < expanded {
-			m.textarea.SetHeight(expanded)
+		// this expands the textarea if user starts typing and collapses it if they clear it
+		expanded, collapsed := styles.TEXTAREA_HEIGHT_NORMAL, styles.TEXTAREA_HEIGHT_COLLAPSED
+		if m.textarea.Length() > 0 {
+			if m.textarea.Height() < expanded {
+				m.textarea.SetHeight(expanded)
+				cmds = append(cmds, m.redraw, textarea.Blink)
+			}
+		} else if m.textarea.Height() > collapsed {
+			m.textarea.SetHeight(collapsed)
 			cmds = append(cmds, m.redraw, textarea.Blink)
 		}
-	} else if m.textarea.Height() > collapsed {
-		m.textarea.SetHeight(collapsed)
-		cmds = append(cmds, m.redraw, textarea.Blink)
+		return m, tea.Batch(cmds...)
 	}
 
 	// prevent movement keys from scrolling the viewport
@@ -360,9 +365,9 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	default:
 		m.viewport, vpCmd = m.viewport.Update(msg)
+		return m, vpCmd
 	}
-	cmds = append(cmds, taCmd, vpCmd)
-	return m, tea.Batch(cmds...)
+	return m, nil
 }
 
 // redraw initiates the Window resize handler. Use it after changing the dimensions of a component to make the others update
