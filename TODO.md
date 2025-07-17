@@ -1,11 +1,16 @@
 ## TODO List
 - rename project
 
+#### Bugs:
+- with blank, focused textarea and scrollable chat history, pressing a key to expand the textarea glitches the screen. To fix,
+
 #### UI:
+- scroll textarea by passing it arrow key events
 - during streaming, only render current prompt and response for better UX. upon stream completion, render entire history and reposition where user was at the moment the stream completed. if a scrollup happens at vp.YOffset==0, render entire history, reposition to scroll pos
 - fix scrolling of textarea (use bubblezone to multiplex)
 - move horizontal padding out into the view functions. dont pad in md renderer. add left gutter for copy?
 - when textarea empty, keypad up/vim up cycles up in history. when at last char in textarea, keypad down/vim down cycles down in history if any
+- mark prompt lines in new selection gutter on the left side of screen
 - impl discoloring/stop blinking when focus is lost
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
 - add popup command menu when holding ctrl
@@ -20,6 +25,7 @@
 - fully impl ability to switch models mid-session with a command, keeping history. use a selector bubble
 - use contexts with streaming to cancel after 10 secs of no API response, resetting this timer if a chunk is recieved
 - impl openAI models
+- modify system prompt for current chat in TUI (popup bubble)
 
 #### Configuration:
 - use XDG_CONFIG

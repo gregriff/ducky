@@ -319,7 +319,7 @@ msgType:
 
 		headerHeight := lipgloss.Height(m.headerView())
 		textAreaHeight := m.textarea.Height()
-		verticalMarginHeight := headerHeight + textAreaHeight + 1 // +1 for spacing in View()
+		verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
 
 		viewportHeight := msg.Height - verticalMarginHeight
 		textAreaWidth := msg.Width - styles.H_PADDING
@@ -346,10 +346,6 @@ msgType:
 	}
 
 	if m.textarea.Focused() {
-		// ensure we aren't returning nil above these lines and therefore blocking messages to these models
-		m.textarea, taCmd = m.textarea.Update(msg)
-		cmds = append(cmds, taCmd)
-
 		// this expands the textarea if user starts typing and collapses it if they clear it
 		expanded, collapsed := styles.TEXTAREA_HEIGHT_NORMAL, styles.TEXTAREA_HEIGHT_COLLAPSED
 		if m.textarea.Length() > 0 {
@@ -361,6 +357,9 @@ msgType:
 			m.textarea.SetHeight(collapsed)
 			cmds = append(cmds, m.redraw, textarea.Blink)
 		}
+		// ensure we aren't returning nil above these lines and therefore blocking messages to these models
+		m.textarea, taCmd = m.textarea.Update(msg)
+		cmds = append(cmds, taCmd)
 		return m, tea.Batch(cmds...)
 	}
 
@@ -434,13 +433,12 @@ func (m *TUIModel) View() string {
 	if !m.ready {
 		return "Initializing..."
 	}
-	// NOTE: if you change this you need to change code in the window resize event handler
-	spacing := "\n"
 	return zone.Scan(
-		fmt.Sprintf("%s\n%s\n%s", // NOTE: newlines needed between every component placed vertically (so they're not sidebyside and wrapped)
+		// NOTE: newlines needed between every component placed vertically (so they're not sidebyside and wrapped)
+		fmt.Sprintf("%s\n%s\n%s",
 			m.headerView(),
 			zone.Mark("chatViewport", m.viewport.View()),
-			zone.Mark("promptInput", spacing+m.textarea.View()),
+			zone.Mark("promptInput", styles.VP_TA_SPACING+m.textarea.View()),
 		),
 	)
 }

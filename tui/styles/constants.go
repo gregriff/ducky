@@ -11,4 +11,8 @@ const (
 
 	TEXTAREA_HEIGHT_COLLAPSED int = 1
 	TEXTAREA_HEIGHT_NORMAL    int = 3
+
+	// spacing between the main viewport and the textarea
+	VP_TA_SPACING      string = "\n"
+	VP_TA_SPACING_SIZE int    = len(VP_TA_SPACING)
 )
