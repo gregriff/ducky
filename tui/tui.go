@@ -347,38 +347,32 @@ msgType:
 
 	// TODO: resizing window while textarea is not focused may prevent textarea resizing until it is focused
 	if m.textarea.Focused() {
-		// var newHeight int
+		var newHeight int
 		expanded, collapsed := styles.TEXTAREA_HEIGHT_NORMAL, styles.TEXTAREA_HEIGHT_COLLAPSED
 		if m.textarea.Length() > 0 {
 			if m.textarea.Height() < expanded {
-				windowWidth := m.windowSize.Width
-				headerHeight := lipgloss.Height(m.headerView())
-				textAreaHeight := expanded
-				verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
-				viewportHeight := m.windowSize.Height - verticalMarginHeight
-				textAreaWidth := windowWidth - styles.H_PADDING
-
-				m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
-				m.textarea.SetHeight(expanded)
-				cmds = append(cmds, textarea.Blink)
-				// cmds = append(cmds, m.redraw, textarea.Blink)
+				newHeight = expanded
 			}
 		} else if m.textarea.Height() > collapsed {
+			newHeight = collapsed
+		}
+
+		// set height of textarea, updating viewport first to prevent visual glitching
+		if newHeight != 0 {
 			windowWidth := m.windowSize.Width
 			headerHeight := lipgloss.Height(m.headerView())
-			textAreaHeight := collapsed
-			verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
+			verticalMarginHeight := headerHeight + newHeight + styles.VP_TA_SPACING_SIZE
 			viewportHeight := m.windowSize.Height - verticalMarginHeight
 			textAreaWidth := windowWidth - styles.H_PADDING
 
 			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
-			m.textarea.SetHeight(collapsed)
+			m.textarea.SetHeight(newHeight)
 			cmds = append(cmds, textarea.Blink)
-			// cmds = append(cmds, m.redraw, textarea.Blink)
+			return m.updateComponents(msg, cmds)
 		}
-		// else {
-		// log.Println("NO TA SETHEIGHT. Updating textarea but not viewport")
-		// }
+
+		// This runs when the textarea is focused and not being resized.
+		// NOTE: this prevents messages from reaching the viewport, which may not be desirable
 		// ensure we aren't returning nil above these lines and therefore blocking messages to these models
 		m.textarea, taCmd = m.textarea.Update(msg)
 		cmds = append(cmds, taCmd)
@@ -396,6 +390,16 @@ msgType:
 		m.viewport, vpCmd = m.viewport.Update(msg)
 		cmds = append(cmds, vpCmd)
 	}
+	return m, tea.Batch(cmds...)
+}
+
+// updateComponents sends a Msg and []Cmd to the viewport and textarea to update their state and returns a Batch of all commands.
+// Use this in the Update function when both components need to be updated
+func (m *TUIModel) updateComponents(msg tea.Msg, cmds []tea.Cmd) (tea.Model, tea.Cmd) {
+	var taCmd, vpCmd tea.Cmd
+	m.viewport, vpCmd = m.viewport.Update(msg)
+	m.textarea, taCmd = m.textarea.Update(msg)
+	cmds = append(cmds, taCmd, vpCmd)
 	return m, tea.Batch(cmds...)
 }
 
