@@ -208,57 +208,22 @@ msgType:
 
 			textareaFocused := m.textarea.Focused()
 			if zone.Get("chatViewport").InBounds(msg) {
-				if m.chat.HistoryLen() == 0 || m.textarea.Length() == 0 {
-					break
+				if m.chat.HistoryLen() == 0 {
+					break // could just return m, nil
 				}
-				if textareaFocused {
+				// this allows the user to click the viewport and not have the textarea be unfocused if theres not a lot of text in it
+				if textareaFocused && m.textarea.LineCount() > styles.TEXTAREA_HEIGHT_COLLAPSED {
 					m.textarea.Blur() // TODO: need to collapse it as well
 				}
 				if time.Since(m.lastLeftClick) < 300*time.Millisecond {
-					tmpFile, err := os.CreateTemp(".", "pager-*")
-					if err != nil {
-						return m, func() tea.Msg {
-							return pagerError{err: err}
-						}
-					}
-					m.pagerTempfile = tmpFile.Name()
-
-					// calculate the line Number clicked to open the pager in the exact same position as what is on screen
-					selectedLine := max(m.viewport.YOffset-2, 0) // I don't know where the 2 comes from
-					_, writeErr := tmpFile.WriteString(m.chat.Render(m.viewport.Width))
-					if writeErr != nil {
-						return m, func() tea.Msg {
-							return pagerError{err: writeErr}
-						}
-					}
-					cmd := exec.Command(
-						"less",
-						fmt.Sprintf("+%d", selectedLine),
-						"--use-color",       // display ANSI colors
-						"--chop-long-lines", // dont wrap long lines
-						"--quit-on-intr",    // quit on ctrl+c
-						"--incsearch",       // incremental search
-						fmt.Sprintf("--prompt=%s", `?eEOF ?m(response %i of %m).`),
-						m.pagerTempfile,
-					)
-					cmd.Env = append(os.Environ(),
-						"LESSSECURE=1", // disables in-pager shell, editing, pipe etc.
-					)
-					onPagerExit := func(err error) tea.Msg {
-						if err != nil {
-							return pagerError{err: err}
-						}
-						return pagerExit{}
-					}
-					return m, tea.ExecProcess(cmd, onPagerExit)
+					return m, m.openPager()
 				} else {
 					m.lastLeftClick = time.Now()
-					// cmds = append(cmds, m.redraw)
 				}
 
 			} else if zone.Get("promptInput").InBounds(msg) {
 				if !textareaFocused {
-					cmds = append(cmds, m.textarea.Focus(), m.redraw)
+					return m, m.textarea.Focus()
 				}
 			}
 		}
@@ -424,6 +389,46 @@ func (m *TUIModel) getResizeParams(windowHeight, windowWidth int, taHeight *int)
 	viewportHeight = windowHeight - verticalMarginHeight
 	textAreaWidth = windowWidth - styles.H_PADDING
 	return viewportHeight, textAreaWidth
+}
+
+// openPager opens the `less` pager on the entire chat history, at the exact position the user is currently looking at
+func (m *TUIModel) openPager() tea.Cmd {
+	tmpFile, err := os.CreateTemp(".", "pager-*")
+	if err != nil {
+		return func() tea.Msg {
+			return pagerError{err: err}
+		}
+	}
+	m.pagerTempfile = tmpFile.Name()
+
+	// calculate the line Number clicked to open the pager in the exact same position as what is on screen
+	lineToOpenAt := max(m.viewport.YOffset-2, 0) // I don't know where the 2 comes from
+	_, writeErr := tmpFile.WriteString(m.chat.Render(m.viewport.Width))
+	if writeErr != nil {
+		return func() tea.Msg {
+			return pagerError{err: writeErr}
+		}
+	}
+	cmd := exec.Command(
+		"less",
+		fmt.Sprintf("+%d", lineToOpenAt),
+		"--use-color",       // display ANSI colors
+		"--chop-long-lines", // dont wrap long lines
+		"--quit-on-intr",    // quit on ctrl+c
+		"--incsearch",       // incremental search
+		fmt.Sprintf("--prompt=%s", `?eEOF ?m(response %i of %m).`),
+		m.pagerTempfile,
+	)
+	cmd.Env = append(os.Environ(),
+		"LESSSECURE=1", // disables in-pager shell, editing, pipe etc.
+	)
+	onPagerExit := func(err error) tea.Msg {
+		if err != nil {
+			return pagerError{err: err}
+		}
+		return pagerExit{}
+	}
+	return tea.ExecProcess(cmd, onPagerExit)
 }
 
 func (m *TUIModel) removeTempFile() tea.Msg {
