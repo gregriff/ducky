@@ -155,6 +155,9 @@ msgType:
 			}
 			m.chat.Clear() // print something
 			m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+			if !m.textarea.Focused() {
+				return m, m.textarea.Focus()
+			}
 			return m, nil
 		case "enter":
 			input := strings.TrimSpace(m.textarea.Value())
@@ -290,6 +293,7 @@ msgType:
 			cmds = append(cmds, m.textarea.Focus())
 		}
 
+		// TODO: return tea.batch(cmds..., blink)
 		return m, textarea.Blink
 
 	case models.StreamError:
@@ -317,46 +321,64 @@ msgType:
 	case tea.WindowSizeMsg:
 		m.windowSize = msg
 
+		windowWidth := msg.Width
 		headerHeight := lipgloss.Height(m.headerView())
 		textAreaHeight := m.textarea.Height()
 		verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
 
 		viewportHeight := msg.Height - verticalMarginHeight
-		textAreaWidth := msg.Width - styles.H_PADDING
-		markdownWidth := int(float64(msg.Width) * styles.WIDTH_PROPORTION_RESPONSE)
+		textAreaWidth := windowWidth - styles.H_PADDING
+		markdownWidth := int(float64(windowWidth) * styles.WIDTH_PROPORTION_RESPONSE)
 
 		// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 		if !m.ready {
-			m.viewport = viewport.New(msg.Width, viewportHeight)
+			m.viewport = viewport.New(windowWidth, viewportHeight)
 			m.viewport.MouseWheelDelta = 2
 			m.chat.Markdown.SetWidth(markdownWidth)
-			m.viewport.SetContent(m.chat.Render(msg.Width))
+			m.viewport.SetContent(m.chat.Render(windowWidth))
 			m.viewport.GotoBottom()
 			m.textarea.SetWidth(textAreaWidth)
 			m.ready = true
 		} else {
-			m.viewport.Width = msg.Width
-			m.viewport.Height = viewportHeight
-
-			m.textarea.SetWidth(textAreaWidth)
-			m.chat.Markdown.SetWidth(msg.Width)
-			m.viewport.SetContent(m.chat.Render(msg.Width))
+			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 		}
 		// m.textarea.MaxHeight = viewportHeight / 2
 	}
 
+	// TODO: resizing window while textarea is not focused may prevent textarea resizing until it is focused
 	if m.textarea.Focused() {
-		// this expands the textarea if user starts typing and collapses it if they clear it
+		// var newHeight int
 		expanded, collapsed := styles.TEXTAREA_HEIGHT_NORMAL, styles.TEXTAREA_HEIGHT_COLLAPSED
 		if m.textarea.Length() > 0 {
 			if m.textarea.Height() < expanded {
+				windowWidth := m.windowSize.Width
+				headerHeight := lipgloss.Height(m.headerView())
+				textAreaHeight := expanded
+				verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
+				viewportHeight := m.windowSize.Height - verticalMarginHeight
+				textAreaWidth := windowWidth - styles.H_PADDING
+
+				m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 				m.textarea.SetHeight(expanded)
-				cmds = append(cmds, m.redraw, textarea.Blink)
+				cmds = append(cmds, textarea.Blink)
+				// cmds = append(cmds, m.redraw, textarea.Blink)
 			}
 		} else if m.textarea.Height() > collapsed {
+			windowWidth := m.windowSize.Width
+			headerHeight := lipgloss.Height(m.headerView())
+			textAreaHeight := collapsed
+			verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
+			viewportHeight := m.windowSize.Height - verticalMarginHeight
+			textAreaWidth := windowWidth - styles.H_PADDING
+
+			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 			m.textarea.SetHeight(collapsed)
-			cmds = append(cmds, m.redraw, textarea.Blink)
+			cmds = append(cmds, textarea.Blink)
+			// cmds = append(cmds, m.redraw, textarea.Blink)
 		}
+		// else {
+		// log.Println("NO TA SETHEIGHT. Updating textarea but not viewport")
+		// }
 		// ensure we aren't returning nil above these lines and therefore blocking messages to these models
 		m.textarea, taCmd = m.textarea.Update(msg)
 		cmds = append(cmds, taCmd)
@@ -380,6 +402,15 @@ msgType:
 // redraw initiates the Window resize handler. Use it after changing the dimensions of a component to make the others update
 func (m *TUIModel) redraw() tea.Msg {
 	return m.windowSize
+}
+
+func (m *TUIModel) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
+	m.viewport.Width = windowWidth
+	m.viewport.Height = viewportHeight
+
+	m.textarea.SetWidth(textAreaWidth)
+	m.chat.Markdown.SetWidth(windowWidth)
+	m.viewport.SetContent(m.chat.Render(windowWidth))
 }
 
 func (m *TUIModel) removeTempFile() tea.Msg {
