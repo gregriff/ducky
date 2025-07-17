@@ -109,6 +109,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds []tea.Cmd
 	)
 
+msgType:
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		keyString := msg.String()
@@ -168,34 +169,29 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
-		// At the bottom of this update function, the textarea will take commands from the viewport if the textarea is focused.
 		// Here we define a condition where the textarea can be focused, but scroll events will be sent to the viewport instead.
 		sendScrollToViewport := m.textarea.Focused() && m.textarea.LineCount() <= m.textarea.Height()
 
-		if msg.Button == tea.MouseButtonWheelUp {
-			if m.isStreaming { // allow user to scroll up during streaming and keep their position
-				m.preventScrollToBottom = true
-			}
-
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
 			// here we don't scroll up if the user has just pressed esc. On mac, the rapid scroll events build up, and may
 			// register after the esc handler, which results in the viewport scrolling up after going to the bottom.
 			// if time.Since(m.lastManualGoToBottom) < 800*time.Millisecond {
 			// return m, nil
 			// }
-			if sendScrollToViewport {
-				m.viewport, vpCmd = m.viewport.Update(msg)
-				return m, vpCmd
+			if m.isStreaming { // allow user to scroll up during streaming and keep their position
+				m.preventScrollToBottom = true
 			}
-			break // let textarea handle scroll
-		}
-
-		// the switch below will capture this button and prevent scroll so break out
-		if msg.Button == tea.MouseButtonWheelDown {
+			fallthrough // I know this and the labeled break are ugly but I'm experimenting here
+		case tea.MouseButtonWheelDown:
+			var scrollCmd tea.Cmd
 			if sendScrollToViewport {
-				m.viewport, vpCmd = m.viewport.Update(msg)
-				return m, vpCmd
+				m.viewport, scrollCmd = m.viewport.Update(msg)
+				return m, scrollCmd
 			}
-			break // let textarea handle scroll
+			// break out of the top-level switch because we still need the normal viewport.Update to handle the scroll events
+			// (this break allows the viewport to scroll when the textinput is unfocused and m.textarea.LineCount() <= m.textarea.Height())
+			break msgType
 		}
 
 		// handles all mouse EVENTS  TODO: re-evaluate for bugs
@@ -214,7 +210,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textarea.Blur() // TODO: need to collapse it as well
 				}
 				if time.Since(m.lastLeftClick) < 300*time.Millisecond {
-
 					tmpFile, err := os.CreateTemp(".", "pager-*")
 					if err != nil {
 						return m, func() tea.Msg {
@@ -222,11 +217,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 					m.pagerTempfile = tmpFile.Name()
-
-					// somehow this whole chunk cancels out to the calc below...
-					// headerHeight := lipgloss.Height(m.headerView())
-					// lineNumber := msg.Y - headerHeight + m.viewport.YOffset
-					// lineNumber = lineNumber - (msg.Y - headerHeight) - 2
 
 					// calculate the line Number clicked to open the pager in the exact same position as what is on screen
 					selectedLine := max(m.viewport.YOffset-2, 0) // I don't know where the 2 comes from

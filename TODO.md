@@ -2,6 +2,7 @@
 - rename project
 
 #### UI:
+- during streaming, only render current prompt and response for better UX. upon stream completion, render entire history and reposition where user was at the moment the stream completed. if a scrollup happens at vp.YOffset==0, render entire history, reposition to scroll pos
 - fix scrolling of textarea (use bubblezone to multiplex)
 - move horizontal padding out into the view functions. dont pad in md renderer. add left gutter for copy?
 - when textarea empty, keypad up/vim up cycles up in history. when at last char in textarea, keypad down/vim down cycles down in history if any
@@ -42,7 +43,6 @@ Preset config options to use for the chat
 - option to load pager into a file with only the current prompt/response, use the less commands :n,:p to navigate through responses:
   - :n,:p would load pager at top of file (prompt)
 > this would make saving response context to Marks easier but not nessicary
-- better calculate line number to open pager in by taking into account HeaderView.Height and mouseMsg.Y. In order to try to get the pager to open the text in the exact same position as it is on screen
 
 ##### Marks:
 - figure out showing them in pager without truncated line symbol (add H_PADDING in View function instead of in RenderHistory so text is always less wide than text+Mark status bar width)
@@ -84,6 +84,11 @@ Do both, opening editor on doubleclick and dragging does native select
   - formatter
   - auditor?
   - one that checks for log.Print*
+
+#### Random
+###### Sliding-windowesque rendering of chat history:
+Only render last N prompts/responses depending on their length, because the user won't resonably scroll up to view those. would probably require bubblezone-like marking of the renderedHistory stringbuilder during writing it, with
+invisible ANSI codes. or could ditch the stringbuilder and lazy-render the markdown from the stored rawtext. This would be complicated so probably don't do this but it would reduce CPU usage during window resizing. prob not worth it
 
 #### Testing:
 - Ubuntu, fedora
