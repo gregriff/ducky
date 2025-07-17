@@ -111,7 +111,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// log.Printf("Msg: %T", msg)
 
-msgType:
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		keyString := msg.String()
@@ -175,7 +174,13 @@ msgType:
 
 	case tea.MouseMsg:
 		// Here we define a condition where the textarea can be focused, but scroll events will be sent to the viewport instead.
-		sendScrollToViewport := m.textarea.Focused() && m.textarea.LineCount() <= m.textarea.Height()
+		textAreaFocused := m.textarea.Focused()
+
+		var (
+			scrollCmd     tea.Cmd
+			scrollKey     tea.KeyMsg
+			triggerScroll bool
+		)
 
 		switch msg.Button {
 		case tea.MouseButtonWheelUp:
@@ -187,16 +192,23 @@ msgType:
 			if m.isStreaming { // allow user to scroll up during streaming and keep their position
 				m.preventScrollToBottom = true
 			}
-			fallthrough // I know this and the labeled break are ugly but I'm experimenting here
+			triggerScroll, scrollKey = true, tea.KeyMsg{Type: tea.KeyUp}
+
 		case tea.MouseButtonWheelDown:
-			var scrollCmd tea.Cmd
-			if sendScrollToViewport {
+			triggerScroll, scrollKey = true, tea.KeyMsg{Type: tea.KeyDown}
+		}
+
+		if triggerScroll {
+			if textAreaFocused {
+				if m.textarea.LineCount() <= m.textarea.Height() {
+					m.viewport, scrollCmd = m.viewport.Update(msg)
+				} else {
+					m.textarea, scrollCmd = m.textarea.Update(scrollKey)
+				}
+			} else {
 				m.viewport, scrollCmd = m.viewport.Update(msg)
-				return m, scrollCmd
 			}
-			// break out of the top-level switch because we still need the normal viewport.Update to handle the scroll events
-			// (this break allows the viewport to scroll when the textinput is unfocused and m.textarea.LineCount() <= m.textarea.Height())
-			break msgType
+			return m, scrollCmd
 		}
 
 		// handles all mouse EVENTS  TODO: re-evaluate for bugs

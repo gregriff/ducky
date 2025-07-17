@@ -2,7 +2,7 @@
 - rename project
 
 #### Bugs:
-- with blank, focused textarea and scrollable chat history, pressing a key to expand the textarea glitches the screen. To fix,
+-
 
 #### UI:
 - scroll textarea by passing it arrow key events
