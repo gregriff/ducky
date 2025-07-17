@@ -97,7 +97,7 @@ func (m *TUIModel) Start() {
 
 // Init performs initial IO.
 func (m *TUIModel) Init() tea.Cmd {
-	return tea.Batch(tea.SetWindowTitle("ducky"), textarea.Blink, m.textarea.Focus())
+	return tea.Batch(tea.SetWindowTitle("ducky"), m.textarea.Focus())
 }
 
 func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -108,6 +108,8 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		cmds []tea.Cmd
 	)
+
+	// log.Printf("Msg: %T", msg)
 
 msgType:
 	switch msg := msg.(type) {
@@ -127,7 +129,7 @@ msgType:
 					cmds = append(cmds, m.redraw)
 				}
 			} else if !m.isStreaming {
-				cmds = append(cmds, m.textarea.Focus(), textarea.Blink, m.redraw)
+				cmds = append(cmds, m.textarea.Focus(), m.redraw)
 				// if numLines > curHeight:
 				// 		if numLines > normal, set height to min(numLines, maxHeight)
 				// 		else set height to normal
@@ -206,7 +208,7 @@ msgType:
 
 			textareaFocused := m.textarea.Focused()
 			if zone.Get("chatViewport").InBounds(msg) {
-				if m.chat.HistoryLen() == 0 {
+				if m.chat.HistoryLen() == 0 || m.textarea.Length() == 0 {
 					break
 				}
 				if textareaFocused {
@@ -290,11 +292,9 @@ msgType:
 		}
 		m.preventScrollToBottom = false
 		if !m.textarea.Focused() {
-			cmds = append(cmds, m.textarea.Focus())
+			return m, m.textarea.Focus()
 		}
-
-		// TODO: return tea.batch(cmds..., blink)
-		return m, textarea.Blink
+		return m, nil
 
 	case models.StreamError:
 		errMsg := fmt.Sprintf("**Error:** %v", msg.ErrMsg)
@@ -320,20 +320,14 @@ msgType:
 
 	case tea.WindowSizeMsg:
 		m.windowSize = msg
-
-		windowWidth := msg.Width
-		headerHeight := lipgloss.Height(m.headerView())
-		textAreaHeight := m.textarea.Height()
-		verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
-
-		viewportHeight := msg.Height - verticalMarginHeight
-		textAreaWidth := windowWidth - styles.H_PADDING
-		markdownWidth := int(float64(windowWidth) * styles.WIDTH_PROPORTION_RESPONSE)
+		windowHeight, windowWidth := msg.Height, msg.Width
+		viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, nil)
 
 		// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 		if !m.ready {
 			m.viewport = viewport.New(windowWidth, viewportHeight)
 			m.viewport.MouseWheelDelta = 2
+			markdownWidth := int(float64(windowWidth) * styles.WIDTH_PROPORTION_RESPONSE)
 			m.chat.Markdown.SetWidth(markdownWidth)
 			m.viewport.SetContent(m.chat.Render(windowWidth))
 			m.viewport.GotoBottom()
@@ -342,6 +336,7 @@ msgType:
 		} else {
 			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 		}
+		return m.updateComponents(msg, cmds)
 		// m.textarea.MaxHeight = viewportHeight / 2
 	}
 
@@ -359,15 +354,12 @@ msgType:
 
 		// set height of textarea, updating viewport first to prevent visual glitching
 		if newHeight != 0 {
-			windowWidth := m.windowSize.Width
-			headerHeight := lipgloss.Height(m.headerView())
-			verticalMarginHeight := headerHeight + newHeight + styles.VP_TA_SPACING_SIZE
-			viewportHeight := m.windowSize.Height - verticalMarginHeight
-			textAreaWidth := windowWidth - styles.H_PADDING
+			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
+			viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
 
 			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 			m.textarea.SetHeight(newHeight)
-			cmds = append(cmds, textarea.Blink)
+			cmds = append(cmds, textarea.Blink) // not needed?
 			return m.updateComponents(msg, cmds)
 		}
 
@@ -415,6 +407,23 @@ func (m *TUIModel) resizeComponents(windowWidth, textAreaWidth, viewportHeight i
 	m.textarea.SetWidth(textAreaWidth)
 	m.chat.Markdown.SetWidth(windowWidth)
 	m.viewport.SetContent(m.chat.Render(windowWidth))
+}
+
+// getResizeParams returns size dimensions of on-screen components needed during redrawing or resizing
+func (m *TUIModel) getResizeParams(windowHeight, windowWidth int, taHeight *int) (viewportHeight int, textAreaWidth int) {
+	var textAreaHeight int
+	if taHeight != nil {
+		textAreaHeight = *taHeight
+	} else {
+		textAreaHeight = m.textarea.Height()
+	}
+
+	headerHeight := lipgloss.Height(m.headerView())
+	verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
+
+	viewportHeight = windowHeight - verticalMarginHeight
+	textAreaWidth = windowWidth - styles.H_PADDING
+	return viewportHeight, textAreaWidth
 }
 
 func (m *TUIModel) removeTempFile() tea.Msg {
