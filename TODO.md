@@ -12,12 +12,14 @@
 - impl discoloring/stop blinking when focus is lost
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
 - add popup command menu when holding ctrl
+- add messages for history cleared etc.
+-
+- insert newline into textarea once V2 is used
 - File uploads by drag/dropping into terminal
 
 #### Rendering:
 - Hyperlinks/citations, at least for claude models, as terminal hyperlinks: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
 - Fix Markdown H2s
-- make custom glamour stylesheet to render the centered H2s
 
 #### Model Support:
 - fully impl ability to switch models mid-session with a command, keeping history. use a selector bubble
@@ -26,12 +28,8 @@
 - modify system prompt for current chat in TUI (popup bubble)
 
 #### Configuration:
-- use XDG_CONFIG
-- complete viper config file stuff
-- add more config options
-- add YAML file spec and put it at top of a demo-config.yaml in the repo
+- add TOML file spec and put it at top of a demo-config.toml in the repo
 - add color configs:
-  - glamour md stylesheet or at least style preset
   - pager prompt
   - UI elements
 
@@ -91,8 +89,7 @@ Do both, opening editor on doubleclick and dragging does native select
 
 #### Random
 ###### Sliding-windowesque rendering of chat history:
-Only render last N prompts/responses depending on their length, because the user won't resonably scroll up to view those. would probably require bubblezone-like marking of the renderedHistory stringbuilder during writing it, with
-invisible ANSI codes. or could ditch the stringbuilder and lazy-render the markdown from the stored rawtext. This would be complicated so probably don't do this but it would reduce CPU usage during window resizing. prob not worth it
+Only render last N prompts/responses depending on their length, because the user won't resonably scroll up to view those. would probably require bubblezone-like marking of the renderedHistory stringbuilder during writing it, with invisible ANSI codes. or could ditch the stringbuilder and lazy-render the markdown from the stored rawtext. This would be complicated so probably don't do this but it would reduce CPU usage during window resizing. prob not worth it
 
 #### Testing:
 - Ubuntu, fedora

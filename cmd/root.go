@@ -49,9 +49,9 @@ func initConfig() {
 		cobra.CheckErr(err)
 
 		// TODO: use funcs from 'os' to make it work on Windows
-		viper.SetConfigName("gpt-cli")
-		viper.SetConfigType("yaml")
-		viper.AddConfigPath(home + "/.config/.gpt-cli/")
+		viper.SetConfigName("gpt-cli-go")
+		viper.SetConfigType("toml")
+		viper.AddConfigPath(home + "/.config/gpt-cli-go/")
 		viper.AddConfigPath(".")
 		if err := viper.ReadInConfig(); err != nil {
 			if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -60,6 +60,8 @@ func initConfig() {
 				fmt.Println("Error reading config file: ", err)
 				os.Exit(1)
 			}
+		} else {
+			fmt.Printf("Using config file: %s\n", viper.ConfigFileUsed())
 		}
 	}
 }
@@ -70,7 +72,7 @@ func init() {
 	// will be global for your application.
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/.gpt-cli/.gpt-cli-go.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/gpt-cli-go/gpt-cli-go.toml)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
