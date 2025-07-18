@@ -29,9 +29,9 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	rootCmd.PersistentFlags().StringP("system_prompt", "p", "", "system prompt that will influence model responses")
-	viper.BindPFlag("system_prompt", rootCmd.PersistentFlags().Lookup("system_prompt"))
-	viper.SetDefault("system_prompt", "You are a concise assistant to a software engineer")
+	rootCmd.PersistentFlags().StringP("system-prompt", "p", "", "system prompt that will influence model responses")
+	viper.BindPFlag("system-prompt", rootCmd.PersistentFlags().Lookup("system-prompt"))
+	viper.SetDefault("system-prompt", "You are a concise assistant to a software engineer")
 
 	rootCmd.PersistentFlags().StringP("model", "m", "", "model to use")
 	viper.BindPFlag("model", rootCmd.PersistentFlags().Lookup("model"))
@@ -68,7 +68,7 @@ func runTUI(cmd *cobra.Command, args []string) {
 
 	zone.NewGlobal()
 	tui := tui.NewTUI(
-		viper.GetString("system_prompt"),
+		viper.GetString("system-prompt"),
 		viper.GetString("model"),
 		viper.GetBool("reasoning"),
 		viper.GetInt("max-tokens"),
