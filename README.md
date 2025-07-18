@@ -3,8 +3,8 @@
 Gpt-cli-go aims to provide the best LLM chat interface for developers. With a minimal UX and a UI inspired by text messaging apps, gpt-cli-go lets you access the most powerful LLM's within the terminal via an intuitive interface.
 
 ### Installation
-
-`go install github.com/gregriff/gpt-cli-go`
+1. Install Go
+2. `go install github.com/gregriff/gpt-cli-go@latest`
 
 ### Configuration
 Copy `gpt-cli-go.toml` into `$XDG_CONFIG_HOME/gpt-cli-go/gpt-cli-go.toml` and insert your configuration
