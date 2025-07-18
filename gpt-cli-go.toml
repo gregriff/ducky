@@ -1,0 +1,8 @@
+model = "sonnet"
+system-prompt = "You are a concise assistant to a software engineer"
+reasoning = true
+max-tokens = 2048
+style = "tokyo-night"
+
+anthropic-api-key = ""
+openai-api-key = ""

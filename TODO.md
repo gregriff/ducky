@@ -2,7 +2,7 @@
 - rename project
 
 #### Bugs:
-- during streaming, gap between prompt and reasoning/response is larger than it is on final render. creates an annoying text jump
+-
 
 #### UI:
 - during streaming, only render current prompt and response for better UX. upon stream completion, render entire history and reposition where user was at the moment the stream completed. if a scrollup happens at vp.YOffset==0, render entire history, reposition to scroll pos
@@ -12,13 +12,14 @@
 - impl discoloring/stop blinking when focus is lost
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
 - add popup command menu when holding ctrl
+- add messages for history cleared etc.
+-
 - insert newline into textarea once V2 is used
 - File uploads by drag/dropping into terminal
 
 #### Rendering:
 - Hyperlinks/citations, at least for claude models, as terminal hyperlinks: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
 - Fix Markdown H2s
-- make custom glamour stylesheet to render the centered H2s
 
 #### Model Support:
 - fully impl ability to switch models mid-session with a command, keeping history. use a selector bubble
@@ -27,12 +28,8 @@
 - modify system prompt for current chat in TUI (popup bubble)
 
 #### Configuration:
-- use XDG_CONFIG
-- complete viper config file stuff
-- add more config options
-- add YAML file spec and put it at top of a demo-config.yaml in the repo
+- add TOML file spec and put it at top of a demo-config.toml in the repo
 - add color configs:
-  - glamour md stylesheet or at least style preset
   - pager prompt
   - UI elements
 
