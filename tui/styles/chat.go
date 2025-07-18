@@ -10,6 +10,7 @@ var ChatStyles = ChatStylesStruct{
 	PromptText: lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#32cd32")), // green
 
+	// TODO: have reasoning use its own markdown renderer?
 	// ReasoningText: lipgloss.NewStyle().
 	// Foreground(lipgloss.Color("#a9a9a9")).
 	// Foreground(lipgloss.Color("#32cd32")).

@@ -23,7 +23,7 @@ It aims to provide a minimal feature-set with a polished UX, and supports Markdo
 Keybinds:
 - Quit : ctrl+d
 - Clear History/Quit : ctrl+c
-- Scroll to Bottom : esc
+- Toggle Focus : esc
 - Text Input Controls : ctrl+a,u,k,e,n,p,b,f,h,m,t,w,d
 `,
 	// Uncomment the following line if your bare application

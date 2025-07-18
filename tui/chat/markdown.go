@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/charmbracelet/glamour"
 )
@@ -15,19 +14,13 @@ type MarkdownRenderer struct {
 	mtx      sync.RWMutex
 	renderer *glamour.TermRenderer
 
-	style          string
-	currentWidth   int
-	pendingWidth   int
-	resizeTimer    *time.Timer
-	resizeDebounce time.Duration
+	style        string
+	currentWidth int
 }
 
+// NewMarkdownRenderer creates the struct but Markdown cannot be rendered until .SetWidth is called
 func NewMarkdownRenderer(glamourStyle string) *MarkdownRenderer {
-	return &MarkdownRenderer{
-		style:          glamourStyle,
-		currentWidth:   -1, // width on init will be zero, need to use -1 to prevent deadlock
-		resizeDebounce: 50 * time.Millisecond,
-	}
+	return &MarkdownRenderer{style: glamourStyle}
 }
 
 // Render safely renders Markdown
@@ -48,41 +41,11 @@ func (md *MarkdownRenderer) Render(markdown string) string {
 	return output
 }
 
-// SetWidth resizes the renderable area of the screen. Designed to handle frequent resize events by debouncing
+// SetWidth immediately resizes the renderable area of the screen
 func (md *MarkdownRenderer) SetWidth(width int) {
 	md.mtx.Lock()
 	defer md.mtx.Unlock()
 
-	md.pendingWidth = width
-
-	// Cancel existing timer
-	if md.resizeTimer != nil {
-		md.resizeTimer.Stop()
-	}
-
-	// Set new timer
-	md.resizeTimer = time.AfterFunc(md.resizeDebounce, func() {
-		md.applyWidth(md.pendingWidth)
-	})
-}
-
-// SetWidthImmediate immediately resizes the renderable area of the screen
-func (md *MarkdownRenderer) SetWidthImmediate(width int) {
-	md.mtx.Lock()
-	defer md.mtx.Unlock()
-
-	if md.resizeTimer != nil {
-		md.resizeTimer.Stop()
-		md.resizeTimer = nil
-	}
-
-	md.createRenderer(width)
-}
-
-// applyWidth resizes the renderable area of the screen. Designed to be called by a delayed function
-func (md *MarkdownRenderer) applyWidth(width int) {
-	md.mtx.Lock()
-	defer md.mtx.Unlock()
 	md.createRenderer(width)
 }
 

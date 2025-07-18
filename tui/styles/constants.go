@@ -6,6 +6,13 @@ const (
 	PROMPT_V_PADDING int = 1
 
 	// widths relative to viewport width (100% term width - H_PADDING*2)
-	PROMPT_WIDTH_PROPORTION   float64 = 6 / 7.
-	RESPONSE_WIDTH_PROPORTION float64 = 9 / 10.
+	WIDTH_PROPORTION_PROMPT   float64 = 6 / 7.
+	WIDTH_PROPORTION_RESPONSE float64 = 9 / 10.
+
+	TEXTAREA_HEIGHT_COLLAPSED int = 1
+	TEXTAREA_HEIGHT_NORMAL    int = 3
+
+	// spacing between the main viewport and the textarea
+	VP_TA_SPACING      string = "\n"
+	VP_TA_SPACING_SIZE int    = len(VP_TA_SPACING)
 )
