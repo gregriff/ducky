@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -149,6 +150,24 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 
+		if msg.Paste {
+			// here we grab the paste message before textarea gets it, in order to increase the height of the textarea if
+			// the pasted text has many lines
+			content, _ := clipboard.ReadAll()
+			newlines := strings.Count(content, "\n")
+			if newlines > m.textarea.Height() {
+				newHeight := clamp(newlines, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
+				windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
+				viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
+
+				m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
+				m.textarea.SetHeight(newHeight)      // this func clamps
+				return m.updateComponents(msg, cmds) // pass the paste msg to the textarea
+			}
+		}
+
+		// log.Println("STRING: ", keyString)
+
 		switch keyString {
 		case "ctrl+c":
 			if m.chat.HistoryLen() == 0 {
@@ -219,6 +238,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			textareaFocused := m.textarea.Focused()
+			tea.Suspend()
 			if zone.Get("chatViewport").InBounds(msg) {
 				if m.chat.HistoryLen() == 0 {
 					break // could just return m, nil
@@ -309,12 +329,12 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.SetContent(m.chat.Render(windowWidth))
 			m.viewport.GotoBottom()
 			m.textarea.SetWidth(textAreaWidth)
+			m.textarea.MaxHeight = viewportHeight / 2
 			m.ready = true
 		} else {
 			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 		}
 		return m.updateComponents(msg, cmds)
-		// m.textarea.MaxHeight = viewportHeight / 2
 	}
 
 	// TODO: resizing window while textarea is not focused may prevent textarea resizing until it is focused
@@ -336,7 +356,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 			m.textarea.SetHeight(newHeight)
-			cmds = append(cmds, textarea.Blink) // not needed?
 			return m.updateComponents(msg, cmds)
 		}
 
@@ -554,4 +573,12 @@ func (m *TUIModel) initLLMClient(modelName string) error {
 	}
 
 	return fmt.Errorf("unsupported model: %s", modelName)
+}
+
+// clamp is a copy/pasted func from bubbles/textarea, in order to replicate its internal behavior
+func clamp(v, low, high int) int {
+	if high < low {
+		low, high = high, low
+	}
+	return min(high, max(low, v))
 }
