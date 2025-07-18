@@ -2,7 +2,7 @@
 - rename project
 
 #### Bugs:
--
+- during streaming, gap between prompt and reasoning/response is larger than it is on final render. creates an annoying text jump
 
 #### UI:
 - during streaming, only render current prompt and response for better UX. upon stream completion, render entire history and reposition where user was at the moment the stream completed. if a scrollup happens at vp.YOffset==0, render entire history, reposition to scroll pos
@@ -12,6 +12,7 @@
 - impl discoloring/stop blinking when focus is lost
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
 - add popup command menu when holding ctrl
+- insert newline into textarea once V2 is used
 - File uploads by drag/dropping into terminal
 
 #### Rendering:
@@ -91,8 +92,7 @@ Do both, opening editor on doubleclick and dragging does native select
 
 #### Random
 ###### Sliding-windowesque rendering of chat history:
-Only render last N prompts/responses depending on their length, because the user won't resonably scroll up to view those. would probably require bubblezone-like marking of the renderedHistory stringbuilder during writing it, with
-invisible ANSI codes. or could ditch the stringbuilder and lazy-render the markdown from the stored rawtext. This would be complicated so probably don't do this but it would reduce CPU usage during window resizing. prob not worth it
+Only render last N prompts/responses depending on their length, because the user won't resonably scroll up to view those. would probably require bubblezone-like marking of the renderedHistory stringbuilder during writing it, with invisible ANSI codes. or could ditch the stringbuilder and lazy-render the markdown from the stored rawtext. This would be complicated so probably don't do this but it would reduce CPU usage during window resizing. prob not worth it
 
 #### Testing:
 - Ubuntu, fedora

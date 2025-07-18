@@ -4,17 +4,14 @@ Copyright © 2025 Greg Griffin <greg.griffin2@gmail.com>
 package cmd
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"os"
+
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
 	"github.com/gregriff/gpt-cli-go/tui"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	zone "github.com/lrstanley/bubblezone"
-)
-
-var (
-	modelName       string
-	enableReasoning bool
 )
 
 // runCmd represents the run command
@@ -24,7 +21,7 @@ var runCmd = &cobra.Command{
 	Long:  `Begin a prompt session with a specified model.`,
 	// Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return anthropic.ValidateModelName(modelName)
+		return anthropic.ValidateModelName(viper.GetString("model"))
 	},
 	Run: runTUI,
 }
@@ -32,29 +29,50 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	// Here you will define your flags and configuration settings.
+	rootCmd.PersistentFlags().StringP("system_prompt", "p", "", "system prompt that will influence model responses")
+	viper.BindPFlag("system_prompt", rootCmd.PersistentFlags().Lookup("system_prompt"))
+	viper.SetDefault("system_prompt", "You are a concise assistant to a software engineer")
 
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// runCmd.PersistentFlags().String("foo", "", "A help for foo")
-	rootCmd.PersistentFlags().StringVarP(&modelName, "model", "m", "sonnet", "model to use")
-	rootCmd.PersistentFlags().BoolVarP(&enableReasoning, "reasoning", "r", true, "enable reasoning/thinking for supported models")
+	rootCmd.PersistentFlags().StringP("model", "m", "", "model to use")
+	viper.BindPFlag("model", rootCmd.PersistentFlags().Lookup("model"))
+	viper.SetDefault("model", "sonnet")
 
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.PersistentFlags().BoolP("reasoning", "r", true, "enable reasoning/thinking for supported models")
+	viper.BindPFlag("reasoning", rootCmd.PersistentFlags().Lookup("reasoning"))
+	viper.SetDefault("reasoning", true)
+
+	rootCmd.PersistentFlags().IntP("max-tokens", "t", 0, "output token budget for each response")
+	viper.BindPFlag("max-tokens", rootCmd.PersistentFlags().Lookup("max-tokens"))
+	viper.SetDefault("max-tokens", 2048)
+
+	rootCmd.PersistentFlags().StringP("style", "s", "", "glamour style used to render Markdown responses")
+	viper.BindPFlag("style", rootCmd.PersistentFlags().Lookup("style"))
+	viper.SetDefault("style", "tokyo-night")
+
+	rootCmd.PersistentFlags().String("anthropic-api-key", "", "allows access to Claude models")
+	viper.BindPFlag("anthropic-api-key", rootCmd.PersistentFlags().Lookup("anthropic-api-key"))
+
+	rootCmd.PersistentFlags().String("openai-api-key", "", "allows access to OpenAI models")
+	viper.BindPFlag("openai-api-key", rootCmd.PersistentFlags().Lookup("openai-api-key"))
 }
 
 func runTUI(cmd *cobra.Command, args []string) {
-	systemPrompt := "You are a concise assistant to a software engineer"
-
-	// https://github.com/charmbracelet/glamour/issues/405#issuecomment-2741476242
-	glamourStyle := "light"
-	if lipgloss.HasDarkBackground() {
-		glamourStyle = "dark"
+	_, exists := os.LookupEnv("OPENAI_API_KEY") // TODO: check if this is the correct one
+	if !exists {
+		os.Setenv("OPENAI_API_KEY", viper.GetString("openai-api-key"))
+	}
+	_, exists = os.LookupEnv("ANTHROPIC_API_KEY")
+	if !exists {
+		os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
 	}
 
 	zone.NewGlobal()
-	tui := tui.NewTUI(systemPrompt, modelName, enableReasoning, 2048, glamourStyle)
+	tui := tui.NewTUI(
+		viper.GetString("system_prompt"),
+		viper.GetString("model"),
+		viper.GetBool("reasoning"),
+		viper.GetInt("max-tokens"),
+		viper.GetString("style"),
+	)
 	tui.Start()
 }

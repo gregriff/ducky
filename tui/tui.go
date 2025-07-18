@@ -192,9 +192,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
-		// Here we define a condition where the textarea can be focused, but scroll events will be sent to the viewport instead.
-		textAreaFocused := m.textarea.Focused()
-
 		var (
 			scrollCmd     tea.Cmd
 			scrollKey     tea.KeyMsg
@@ -218,7 +215,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if triggerScroll {
-			if textAreaFocused {
+			if m.textarea.Focused() {
 				if m.textarea.LineCount() <= m.textarea.Height() {
 					m.viewport, scrollCmd = m.viewport.Update(msg)
 				} else {
@@ -306,14 +303,14 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case pagerExit:
 		// pager lets term control mouse for selecting/copying. Regain those controls and fullscreen
-		return m, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, m.removeTempFile)
+		return m.cleanUpPager()
 
 	case pagerError:
 		pagerErr := msg.err.Error()
 		if pagerErr != "exit status 2" {
 			m.textarea.InsertString(fmt.Sprintf("Pager Error: %s\n", pagerErr))
 		}
-		return m, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, m.removeTempFile)
+		return m.cleanUpPager()
 
 	case tea.WindowSizeMsg:
 		m.windowSize = msg
@@ -460,6 +457,10 @@ func (m *TUIModel) openPager() tea.Cmd {
 		return pagerExit{}
 	}
 	return tea.ExecProcess(cmd, onPagerExit)
+}
+
+func (m *TUIModel) cleanUpPager() (tea.Model, tea.Cmd) {
+	return m, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, m.removeTempFile)
 }
 
 func (m *TUIModel) removeTempFile() tea.Msg {
