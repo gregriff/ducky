@@ -4,6 +4,7 @@ Copyright © 2025 Greg Griffin <greg.griffin2@gmail.com>
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/gregriff/gpt-cli-go/models/anthropic"
@@ -16,12 +17,19 @@ import (
 
 // runCmd represents the run command
 var runCmd = &cobra.Command{
-	Use:   "run [model to prompt]",
+	Use:   "run [model]",
 	Short: "Create a new prompt session with a model",
 	Long:  `Begin a prompt session with a specified model.`,
-	// Args:  cobra.MinimumNArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		return anthropic.ValidateModelName(viper.GetString("model"))
+		if len(args) > 0 {
+			viper.Set("model", args[0])
+		}
+		model := viper.GetString("model")
+		if model == "" {
+			return fmt.Errorf("model must be specified via argument, flag, config file, or environment variable")
+		}
+		return anthropic.ValidateModelName(model)
 	},
 	Run: runTUI,
 }
@@ -33,9 +41,9 @@ func init() {
 	viper.BindPFlag("system-prompt", rootCmd.PersistentFlags().Lookup("system-prompt"))
 	viper.SetDefault("system-prompt", "You are a concise assistant to a software engineer")
 
-	rootCmd.PersistentFlags().StringP("model", "m", "", "model to use")
-	viper.BindPFlag("model", rootCmd.PersistentFlags().Lookup("model"))
-	viper.SetDefault("model", "sonnet")
+	// rootCmd.PersistentFlags().StringP("model", "m", "", "model to use")
+	// viper.BindPFlag("model", rootCmd.PersistentFlags().Lookup("model"))
+	// viper.SetDefault("model", "sonnet")
 
 	rootCmd.PersistentFlags().BoolP("reasoning", "r", true, "enable reasoning/thinking for supported models")
 	viper.BindPFlag("reasoning", rootCmd.PersistentFlags().Lookup("reasoning"))
@@ -45,7 +53,7 @@ func init() {
 	viper.BindPFlag("max-tokens", rootCmd.PersistentFlags().Lookup("max-tokens"))
 	viper.SetDefault("max-tokens", 2048)
 
-	rootCmd.PersistentFlags().StringP("style", "s", "", "glamour style used to render Markdown responses")
+	rootCmd.PersistentFlags().StringP("style", "s", "", "glamour style used to render Markdown responses (default tokyo-night)")
 	viper.BindPFlag("style", rootCmd.PersistentFlags().Lookup("style"))
 	viper.SetDefault("style", "tokyo-night")
 

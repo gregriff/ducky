@@ -1,23 +1,43 @@
 # gpt-cli-go
 
-Gpt-cli-go aims to provide the best LLM chat interface for developers. With a minimal UX and a UI inspired by text messaging apps, gpt-cli-go lets you access the most powerful LLM's within the terminal via an intuitive interface.
+Gpt-cli-go aims to provide the most ergonomic LLM chat interface for developers. With a minimal UX inspired by text messaging apps, gpt-cli-go gives access to the most powerful LLMs from within the terminal.
 
 ### Installation
 1. Install Go
 2. `go install github.com/gregriff/gpt-cli-go@latest`
 
 ### Configuration
-Copy `gpt-cli-go.toml` into `$XDG_CONFIG_HOME/gpt-cli-go/gpt-cli-go.toml` and insert your configuration
+Copy `gpt-cli-go.toml` into `$XDG_CONFIG_HOME/gpt-cli-go/gpt-cli-go.toml` and insert your configuration.
+
+### Usage
+`gpt-cli-go run [model name]`
+> Run `gpt-cli-go --help` to see all flags and options
+
+### Features
+- Markdown rendering of responses (can customize colors and more)
+- Syntax highlighting of code blocks (configurable, and per-language highlighting coming soon)
+- Double-click a response to open the `less` pager for easier copying and incremental text search
+- Responsive resizing of all elements on screen during terminal window resizing, even during response streaming
+- Intelligent resizing of prompt text input to maximize main content area
+- Graceful handling of API errors
 
 ### Q&A
 - *Why the terminal?*
-> This is for developers. I like to juggle several chats at once, and I'd rather let tmux handle that instead of having several LLM browser tabs open.
+> I like to juggle several chats at once, and I'd rather let tmux handle that instead of having several LLM browser tabs open. Also, all IDEs have a terminal, so any developer can easily incorporate this tool into their existing workflow.
 
 - *Does this support agentic workflows?*
 > No. I'll let the IDEs and model providers handle that. This is a simple prompt/response loop.
 
 - *Why not use the IDE's LLM interface?*
 > I believe LLMs work best in a seperate window when writing software. This makes the programmer think more about their prompts and discourages vibe coding.
+
+- *Why include the `less` pager?*
+> I thought it may be useful to allow full-text search of the chat history. Instead of implementing this from scratch I decided to use a familiar tool that was made specifically for this use case.
+
+- *How to select text and copy to clipboard?*
+> tldr; For now, you are only able to select and copy text that is visible on screen, using either the terminal emulator or multiplexer's dedicated text-selection keybind.
+
+> Unfourtunatly, this is made tricky by the nature of the terminal. Since gpt-cli-go is a uses the terminal's fullscreen mode for a polished feel, it captures all mouse/scroll input from it. While terminals usually have a keybind for overriding this (on alacritty its `shift+left click` to begin highlighting text, on others its `fn+left click`), these solutions only allow copying text visible on the screen. Tmux provides the same behavior with its `copy-mode` by pressing `leader+[`. So, if while selecting text with either of these methods, and you drag the mouse to the top of the screen in order to scroll the text up and continue copying it, the screen will not scroll up, because the mouse and scroll inputs are being temporarily handled by the terminal emulator or multiplexer. A solution to this is for me to implement a text selection/copying feature myself, which is planned.
 
 ### Customizing
 
