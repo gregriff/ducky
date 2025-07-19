@@ -2,7 +2,8 @@
 - rename project
 
 #### Bugs:
-- first few chunks of stream are lost
+- create XDG_CONFIG_HOME if not present and actually use it if set
+- first few chunks of stream are lost (because of block prefix and suffix in style JSON file being an empty string)
 - scrolling of textarea not working, not increasing in size unless paste happens
 
 #### UI:
@@ -21,6 +22,7 @@
 #### Rendering:
 - Hyperlinks/citations, at least for claude models, as terminal hyperlinks: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
 - Fix Markdown H2s
+- preallocate currentResponse builder using maxTokens * ANSI multiplier
 
 #### Model Support:
 - fully impl ability to switch models mid-session with a command, keeping history. use a selector bubble

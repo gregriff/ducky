@@ -27,7 +27,7 @@ var runCmd = &cobra.Command{
 		}
 		model := viper.GetString("model")
 		if model == "" {
-			return fmt.Errorf("model must be specified via argument, flag, config file, or environment variable")
+			return fmt.Errorf("model must be specified via argument, flag, or config file")
 		}
 		return anthropic.ValidateModelName(model)
 	},
@@ -40,10 +40,6 @@ func init() {
 	rootCmd.PersistentFlags().StringP("system-prompt", "p", "", "system prompt that will influence model responses")
 	viper.BindPFlag("system-prompt", rootCmd.PersistentFlags().Lookup("system-prompt"))
 	viper.SetDefault("system-prompt", "You are a concise assistant to a software engineer")
-
-	// rootCmd.PersistentFlags().StringP("model", "m", "", "model to use")
-	// viper.BindPFlag("model", rootCmd.PersistentFlags().Lookup("model"))
-	// viper.SetDefault("model", "sonnet")
 
 	rootCmd.PersistentFlags().BoolP("reasoning", "r", true, "enable reasoning/thinking for supported models")
 	viper.BindPFlag("reasoning", rootCmd.PersistentFlags().Lookup("reasoning"))

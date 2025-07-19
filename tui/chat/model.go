@@ -132,13 +132,13 @@ func (c *ChatModel) Render(vpWidth int) string {
 // .Markdown renderer has already been resized before this function is called.
 func (c *ChatModel) renderChatHistory(startingIndex, vpWidth int) int {
 	maxPromptWidth := int(float64(vpWidth) * styles.WIDTH_PROPORTION_PROMPT)
-	marginStyle := lipgloss.NewStyle().Width(vpWidth - maxPromptWidth)
+	marginText := lipgloss.NewStyle().Width(vpWidth - maxPromptWidth).Render("")
 	promptStyle := lipgloss.NewStyle().Inherit(styles.ChatStyles.PromptText).Width(maxPromptWidth)
 
 	numChats := len(c.history)
 	for i := startingIndex; i < numChats; i++ {
 		prompt, response, error :=
-			c.history[i].createFormattedPrompt(marginStyle, promptStyle, maxPromptWidth),
+			c.history[i].createFormattedPrompt(marginText, promptStyle, maxPromptWidth),
 			c.history[i].response,
 			c.history[i].error
 
