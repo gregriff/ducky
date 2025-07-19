@@ -18,6 +18,9 @@ gpt-cli-go
  # Go workspace file
  go.work
 
+ # Go pprof output
+.pprof/
+
  # Build output
  /bin/
  /pkg/

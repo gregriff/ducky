@@ -60,8 +60,6 @@ func initConfig() {
 				fmt.Println("Error reading config file: ", err)
 				os.Exit(1)
 			}
-		} else {
-			fmt.Printf("Using config file: %s\n", viper.ConfigFileUsed())
 		}
 	}
 }
@@ -73,8 +71,4 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/gpt-cli-go/gpt-cli-go.toml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

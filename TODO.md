@@ -2,7 +2,8 @@
 - rename project
 
 #### Bugs:
--
+- first few chunks of stream are lost
+- scrolling of textarea not working, not increasing in size unless paste happens
 
 #### UI:
 - during streaming, only render current prompt and response for better UX. upon stream completion, render entire history and reposition where user was at the moment the stream completed. if a scrollup happens at vp.YOffset==0, render entire history, reposition to scroll pos
