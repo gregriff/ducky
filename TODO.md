@@ -4,7 +4,7 @@
 
 #### Bugs:
 - create XDG_CONFIG_HOME if not present and actually use it if set
-- scrolling of textarea not working, not increasing in size unless paste happens
+- scrolling of textarea not working, not increasing in size unless paste happens. this is a because the expansion is triggered due to counting newlines in the box, and if typing, or pasting text with no newlines, expansion wont happen
 
 #### UI:
 - during streaming, only render current prompt and response for better UX. upon stream completion, render entire history and reposition where user was at the moment the stream completed. if a scrollup happens at vp.YOffset==0, render entire history, reposition to scroll pos

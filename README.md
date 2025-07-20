@@ -1,17 +1,19 @@
 # ducky
 
-ducky aims to provide the most ergonomic LLM chat interface for developers. With a minimal UX inspired by text messaging apps, ducky lets you access most powerful LLMs from within the terminal.
+![preview](./docs/overview.gif)
+
+Ducky provides the most ergonomic LLM chat interface for developers. With a minimal UX inspired by text messaging apps, ducky lets you access most powerful LLMs from within the terminal.
 
 ### Installation
 1. Install Go
 2. `go install github.com/gregriff/ducky@latest`
 
-### Configuration
-Copy `ducky.toml` into `$XDG_CONFIG_HOME/ducky/ducky.toml` and insert your configuration.
-
 ### Usage
 `ducky run [model name]`
 > Run `ducky --help` to see all flags and options
+
+### Configuration
+Edit the `$XDG_CONFIG_HOME/ducky/ducky.toml` that was created for you.
 
 ### Features
 - Markdown rendering of responses (can customize colors and more)
