@@ -11,11 +11,11 @@ import (
 	"github.com/spf13/viper"
 )
 
-//go:embed gpt-cli-go.toml
+//go:embed ducky.toml
 var defaultConfigFile []byte
 
 func InitConfig(file string) {
-	viper.SetConfigName("gpt-cli-go")
+	viper.SetConfigName("ducky")
 	viper.SetConfigType("toml")
 	viper.AddConfigPath(getConfigDir()) // $XDG_HOME_CONFIG takes precedence over config in repo dir
 	viper.AddConfigPath("./config")     // in the repo
@@ -29,7 +29,7 @@ func InitConfig(file string) {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// create config file from embedded default file
 			viper.ReadConfig(bytes.NewBuffer(defaultConfigFile))
-			configPath := filepath.Join(getConfigDir(), "gpt-cli-go.toml")
+			configPath := filepath.Join(getConfigDir(), "ducky.toml")
 			if err := os.WriteFile(configPath, defaultConfigFile, 0644); err != nil {
 				fmt.Printf("Error writing default config: %v", err)
 			}
@@ -49,7 +49,7 @@ func getConfigDir() string {
 		homeDir, _ := os.UserHomeDir()
 		configHome = filepath.Join(homeDir, ".config")
 	}
-	appConfigDir := filepath.Join(configHome, "gpt-cli-go")
+	appConfigDir := filepath.Join(configHome, "ducky")
 	os.MkdirAll(appConfigDir, 0755)
 	return appConfigDir
 }

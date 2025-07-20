@@ -1,17 +1,17 @@
-# gpt-cli-go
+# ducky
 
-Gpt-cli-go aims to provide the most ergonomic LLM chat interface for developers. With a minimal UX inspired by text messaging apps, gpt-cli-go lets you access most powerful LLMs from within the terminal.
+ducky aims to provide the most ergonomic LLM chat interface for developers. With a minimal UX inspired by text messaging apps, ducky lets you access most powerful LLMs from within the terminal.
 
 ### Installation
 1. Install Go
-2. `go install github.com/gregriff/gpt-cli-go@latest`
+2. `go install github.com/gregriff/ducky@latest`
 
 ### Configuration
-Copy `gpt-cli-go.toml` into `$XDG_CONFIG_HOME/gpt-cli-go/gpt-cli-go.toml` and insert your configuration.
+Copy `ducky.toml` into `$XDG_CONFIG_HOME/ducky/ducky.toml` and insert your configuration.
 
 ### Usage
-`gpt-cli-go run [model name]`
-> Run `gpt-cli-go --help` to see all flags and options
+`ducky run [model name]`
+> Run `ducky --help` to see all flags and options
 
 ### Features
 - Markdown rendering of responses (can customize colors and more)
@@ -37,13 +37,13 @@ Copy `gpt-cli-go.toml` into `$XDG_CONFIG_HOME/gpt-cli-go/gpt-cli-go.toml` and in
 - *How to select text and copy to clipboard?*
 > tldr; For now, you are only able to select and copy text that is visible on screen, using either the terminal emulator or multiplexer's dedicated text-selection keybind.
 
-> Unfourtunately, this is made tricky by the nature of the terminal. Since gpt-cli-go is a uses the terminal's fullscreen mode for a polished feel, it captures all mouse/scroll input from it. While terminals usually have a keybind for overriding this (on alacritty its `shift+left click` to begin highlighting text, on others its `fn+left click`), these solutions only allow copying text visible on the screen. Tmux provides the same behavior with its `copy-mode` by pressing `leader+[`. So, if while selecting text with either of these methods, you drag the mouse to the top of the screen in order to scroll the text up and continue copying it, the screen will not scroll up, because the mouse and scroll inputs are being temporarily handled by the terminal emulator or multiplexer. A solution to this is for me to implement a text selection/copying feature myself, which is planned.
+> Unfourtunately, this is made tricky by the nature of the terminal. Since ducky is a uses the terminal's fullscreen mode for a polished feel, it captures all mouse/scroll input from it. While terminals usually have a keybind for overriding this (on alacritty its `shift+left click` to begin highlighting text, on others its `fn+left click`), these solutions only allow copying text visible on the screen. Tmux provides the same behavior with its `copy-mode` by pressing `leader+[`. So, if while selecting text with either of these methods, you drag the mouse to the top of the screen in order to scroll the text up and continue copying it, the screen will not scroll up, because the mouse and scroll inputs are being temporarily handled by the terminal emulator or multiplexer. A solution to this is for me to implement a text selection/copying feature myself, which is planned.
 
 ### Customizing
 
 Glamour is the package responsible for rendering Markdown. It can be configured with different [styles](https://github.com/charmbracelet/glamour/tree/master/styles), which are JSON files that define mappings of strings to Markdown tokens, as well as colors, spacing options, and "code themes", which determine how code-block Markdown is rendered. These code themes can be changed with the `code_block.theme` property and can include any theme from [this list](https://github.com/alecthomas/chroma/tree/master/styles)
 
-To create your own style, copy a file from [glamour's built-in styles](https://github.com/charmbracelet/glamour/tree/master/styles) and modify it to change colors or other properties. Of note is the top-level `document.block_prefix` property, which if not set to "", will result in spacing inconsistencies when a response stream completes. Then, place the JSON file in `$XDG_CONFIG_HOME/gpt-cli-go/styles`, and refer to it in the CLI args or the `.toml` config file by absolute path.
+To create your own style, copy a file from [glamour's built-in styles](https://github.com/charmbracelet/glamour/tree/master/styles) and modify it to change colors or other properties. Of note is the top-level `document.block_prefix` property, which if not set to "", will result in spacing inconsistencies when a response stream completes. Then, place the JSON file in `$XDG_CONFIG_HOME/ducky/styles`, and refer to it in the CLI args or the `.toml` config file by absolute path.
 
 ### Roadmap
 [Can be found here](./TODO.md)

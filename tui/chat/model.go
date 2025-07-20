@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	styles "github.com/gregriff/gpt-cli-go/tui/styles"
+	styles "github.com/gregriff/ducky/tui/styles"
 )
 
 // ChatModel stores the state of the current chat with the LLM and formats prompts/responses

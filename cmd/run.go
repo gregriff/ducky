@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gregriff/gpt-cli-go/models/anthropic"
-	"github.com/gregriff/gpt-cli-go/tui"
+	"github.com/gregriff/ducky/models/anthropic"
+	"github.com/gregriff/ducky/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 

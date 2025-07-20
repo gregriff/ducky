@@ -1,4 +1,4 @@
-module github.com/gregriff/gpt-cli-go
+module github.com/gregriff/ducky
 
 go 1.24.4
 
