@@ -13,6 +13,7 @@ type LLM interface {
 	DoClearChatHistory()
 	DoGetChatHistory() []Message
 	DoGetModelId() string
+	DoesSupportReasoning() bool
 }
 
 // TODO: handle errors
@@ -34,6 +35,10 @@ func GetChatHistory(llm LLM) {
 
 func GetModelId(llm LLM) string {
 	return llm.DoGetModelId()
+}
+
+func SupportsReasoning(llm LLM) bool {
+	return llm.DoesSupportReasoning()
 }
 
 // BaseLLM defines fields shared by all supported LLMs

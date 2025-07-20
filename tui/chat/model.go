@@ -106,7 +106,7 @@ func (c *ChatModel) Render(vpWidth int) string {
 			totalSize += len(c.history[i].prompt)*2 + len(c.history[i].response)
 		}
 		totalSize += c.stream.Len()
-		totalSize = int(float64(totalSize) * 1.5) // assuming markdown+ansi will add max 50% more bytes
+		totalSize = int(float64(totalSize) * 3) // assuming markdown+ansi will add max 3x more bytes
 		c.renderedHistory.Grow(totalSize)
 
 		// Render chat
@@ -132,17 +132,18 @@ func (c *ChatModel) Render(vpWidth int) string {
 // .Markdown renderer has already been resized before this function is called.
 func (c *ChatModel) renderChatHistory(startingIndex, vpWidth int) int {
 	maxPromptWidth := int(float64(vpWidth) * styles.WIDTH_PROPORTION_PROMPT)
-	marginStyle := lipgloss.NewStyle().Width(vpWidth - maxPromptWidth)
+	marginText := lipgloss.NewStyle().Width(vpWidth - maxPromptWidth).Render("")
 	promptStyle := lipgloss.NewStyle().Inherit(styles.ChatStyles.PromptText).Width(maxPromptWidth)
 
 	numChats := len(c.history)
 	for i := startingIndex; i < numChats; i++ {
 		prompt, response, error :=
-			c.history[i].createFormattedPrompt(marginStyle, promptStyle, maxPromptWidth),
+			c.history[i].createFormattedPrompt(marginText, promptStyle, maxPromptWidth),
 			c.history[i].response,
 			c.history[i].error
 
 		c.renderedHistory.WriteString(prompt)
+		c.renderedHistory.WriteString("\n")
 		c.renderedHistory.WriteString(c.Markdown.Render(response))
 
 		if len(error) > 0 {

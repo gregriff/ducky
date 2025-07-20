@@ -475,7 +475,7 @@ func (m *TUIModel) removeTempFile() tea.Msg {
 func (m *TUIModel) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.responseChan = make(chan models.StreamChunk)
 	m.isStreaming = true
-	if m.enableReasoning { // TODO: && model.supportsReasoning (make new interface func)
+	if m.enableReasoning && m.model.DoesSupportReasoning() {
 		m.isReasoning = true
 	}
 

@@ -1,6 +1,6 @@
 
 run:
-	DEBUG=1 go run . run -mhaiku
+	DEBUG=1 go run . run haiku
 
 install:
 	go install
