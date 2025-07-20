@@ -1,9 +1,9 @@
 ## TODO List
 - rename project
+- profile renderCurrentResponse(), prealloc space for responses using maxTokens
 
 #### Bugs:
 - create XDG_CONFIG_HOME if not present and actually use it if set
-- first few chunks of stream are lost (because of block prefix and suffix in style JSON file being an empty string)
 - scrolling of textarea not working, not increasing in size unless paste happens
 
 #### UI:

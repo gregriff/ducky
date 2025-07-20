@@ -4,11 +4,12 @@ Copyright © 2025 Greg Griffin <greg.griffin2@gmail.com>
 package cmd
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 
+	"github.com/gregriff/gpt-cli-go/config"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var cfgFile string
@@ -40,35 +41,13 @@ func Execute() {
 		os.Exit(1)
 	}
 }
-
-func initConfig() {
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		home, err := os.UserHomeDir()
-		cobra.CheckErr(err)
-
-		// TODO: use funcs from 'os' to make it work on Windows
-		viper.SetConfigName("gpt-cli-go")
-		viper.SetConfigType("toml")
-		viper.AddConfigPath(home + "/.config/gpt-cli-go/")
-		viper.AddConfigPath(".")
-		if err := viper.ReadInConfig(); err != nil {
-			if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-				fmt.Println("No config file found")
-			} else {
-				fmt.Println("Error reading config file: ", err)
-				os.Exit(1)
-			}
-		}
-	}
-}
-
 func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(func() {
+		config.InitConfig(cfgFile)
+	})
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/gpt-cli-go/gpt-cli-go.toml)")
 }
