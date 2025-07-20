@@ -78,8 +78,6 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 		event := stream.Current()
 		err := message.Accumulate(event)
 		if err != nil {
-			// responseChan <- models.StreamChunk{Reasoning: false, Content: fmt.Sprintf("\n\n[Error: %v]", stream.Err())}
-
 			// TODO: format anthropic error message here
 			return models.StreamError{ErrMsg: stream.Err().Error()}
 		}
@@ -150,4 +148,12 @@ func (llm *AnthropicModel) DoGetChatHistory() []models.Message {
 
 func (llm *AnthropicModel) DoGetModelId() string {
 	return llm.ModelConfig.Id
+}
+
+func (llm *AnthropicModel) DoesSupportReasoning() bool {
+	thinking := llm.ModelConfig.Thinking
+	if thinking != nil && *thinking {
+		return true
+	}
+	return false
 }

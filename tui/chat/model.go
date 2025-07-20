@@ -106,7 +106,7 @@ func (c *ChatModel) Render(vpWidth int) string {
 			totalSize += len(c.history[i].prompt)*2 + len(c.history[i].response)
 		}
 		totalSize += c.stream.Len()
-		totalSize = int(float64(totalSize) * 1.5) // assuming markdown+ansi will add max 50% more bytes
+		totalSize = int(float64(totalSize) * 3) // assuming markdown+ansi will add max 3x more bytes
 		c.renderedHistory.Grow(totalSize)
 
 		// Render chat
@@ -143,6 +143,7 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth int) int {
 			c.history[i].error
 
 		c.renderedHistory.WriteString(prompt)
+		c.renderedHistory.WriteString("\n")
 		c.renderedHistory.WriteString(c.Markdown.Render(response))
 
 		if len(error) > 0 {
