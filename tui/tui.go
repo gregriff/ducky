@@ -13,10 +13,10 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/gregriff/gpt-cli-go/models"
-	"github.com/gregriff/gpt-cli-go/models/anthropic"
-	chat "github.com/gregriff/gpt-cli-go/tui/chat"
-	styles "github.com/gregriff/gpt-cli-go/tui/styles"
+	"github.com/gregriff/ducky/models"
+	"github.com/gregriff/ducky/models/anthropic"
+	chat "github.com/gregriff/ducky/tui/chat"
+	styles "github.com/gregriff/ducky/tui/styles"
 	zone "github.com/lrstanley/bubblezone"
 )
 

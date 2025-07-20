@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/anthropics/anthropic-sdk-go" // imported as anthropic
-	"github.com/gregriff/gpt-cli-go/models"
+	"github.com/gregriff/ducky/models"
 )
 
 // AnthropicModel satisfies the models.LLM interface

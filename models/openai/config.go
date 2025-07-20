@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gregriff/gpt-cli-go/models"
+	"github.com/gregriff/ducky/models"
 )
 
 type OpenAIModelConfig struct {

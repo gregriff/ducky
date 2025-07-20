@@ -8,7 +8,7 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/gregriff/gpt-cli-go/cmd"
+	"github.com/gregriff/ducky/cmd"
 )
 
 func main() {

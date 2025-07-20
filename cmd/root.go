@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gregriff/gpt-cli-go/config"
+	"github.com/gregriff/ducky/config"
 	"github.com/spf13/cobra"
 )
 
@@ -16,9 +16,9 @@ var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "gpt-cli-go",
+	Use:   "ducky",
 	Short: "A minimal LLM chat interface",
-	Long: `gpt-cli-go is a terminal-based chat interface to the LLM-provider API's (Anthropic, OpenAI).
+	Long: `ducky is a terminal-based chat interface to the LLM-provider API's (Anthropic, OpenAI).
 It aims to provide a minimal feature-set with a polished UX, and supports Markdown rendering of responses.
 
 Keybinds:
@@ -49,5 +49,5 @@ func init() {
 		config.InitConfig(cfgFile)
 	})
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/gpt-cli-go/gpt-cli-go.toml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/ducky/ducky.toml)")
 }
