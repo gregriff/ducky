@@ -1,9 +1,7 @@
 ## TODO List
-- rename project
 - profile renderCurrentResponse(), prealloc space for responses using maxTokens
 
 #### Bugs:
-- create XDG_CONFIG_HOME if not present and actually use it if set
 - scrolling of textarea not working, not increasing in size unless paste happens. this is a because the expansion is triggered due to counting newlines in the box, and if typing, or pasting text with no newlines, expansion wont happen
 
 #### UI:
@@ -15,7 +13,6 @@
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
 - add popup command menu when holding ctrl
 - add messages for history cleared etc.
--
 - insert newline into textarea once V2 is used
 - File uploads by drag/dropping into terminal
 
@@ -31,7 +28,6 @@
 - modify system prompt for current chat in TUI (popup bubble)
 
 #### Configuration:
-- add TOML file spec and put it at top of a demo-config.toml in the repo
 - add color configs:
   - pager prompt
   - UI elements

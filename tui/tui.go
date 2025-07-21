@@ -81,7 +81,7 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 		responseChan: make(chan models.StreamChunk),
 	}
 
-	t.initLLMClient(modelName)
+	t.model = InitLLMClient(modelName, systemPrompt, maxTokens)
 	return t
 }
 
@@ -110,7 +110,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds []tea.Cmd
 	)
 
-	// log.Printf("Msg: %T", msg)
+	// log.Printf("%#v\n%T", msg, msg)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -541,9 +541,9 @@ func (m *TUIModel) headerView() string {
 
 }
 
-// initLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
+// InitLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
 // in order to switch between LLMs while preserving message history
-func (m *TUIModel) initLLMClient(modelName string) error {
+func InitLLMClient(modelName, systemPrompt string, maxTokens int) models.LLM {
 	// var pastMessages []models.Message
 	// if t.model != nil {
 	// pastMessages = t.model.DoGetChatHistory()
@@ -559,7 +559,7 @@ func (m *TUIModel) initLLMClient(modelName string) error {
 		{
 			anthropic.ValidateModelName,
 			func(sysPrompt string, maxTokens int, name string, msgs *[]models.Message) models.LLM {
-				return anthropic.NewAnthropicModel(sysPrompt, maxTokens, name, msgs)
+				return anthropic.NewModel(sysPrompt, maxTokens, name, msgs)
 			},
 		},
 		// {openai.ValidateModelName, openai.NewOpenAIModel},
@@ -568,12 +568,11 @@ func (m *TUIModel) initLLMClient(modelName string) error {
 	for _, provider := range providers {
 		if err := provider.validateFunc(modelName); err == nil {
 			// does not return an error, should it? Also, any cleanup we need to do?
-			m.model = provider.newModelFunc(m.systemPrompt, m.maxTokens, modelName, nil)
-			return nil
+			return provider.newModelFunc(systemPrompt, maxTokens, modelName, nil)
 		}
 	}
-
-	return fmt.Errorf("unsupported model: %s", modelName)
+	return nil
+	// return fmt.Errorf("unsupported model: %s", modelName)
 }
 
 // clamp is a copy/pasted func from bubbles/textarea, in order to replicate its internal behavior

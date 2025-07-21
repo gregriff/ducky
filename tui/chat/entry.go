@@ -13,9 +13,9 @@ type ChatEntry struct {
 	error string
 }
 
-// createFormattedPrompt creates a prompt string formatted with margin and padding.
+// formattedPrompt creates a prompt string formatted with margin and padding.
 // It tries to emulate iMessage, right-justifying the prompt and adding a left margin
-func (c *ChatEntry) createFormattedPrompt(marginText string, promptStyle lipgloss.Style, maxWidth int) string {
+func (c *ChatEntry) formattedPrompt(marginText string, promptStyle lipgloss.Style, maxWidth int) string {
 	fullPromptStyle := promptStyle.
 		PaddingLeft(maxWidth - lipgloss.Width(c.prompt) - styles.H_PADDING*2). // replace lg.W with textWidth if bugged
 		PaddingTop(styles.PROMPT_V_PADDING).

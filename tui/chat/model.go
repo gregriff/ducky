@@ -70,8 +70,7 @@ func (c *ChatModel) AccumulateStream(chunk string, isReasoning, isError bool) {
 
 // AddPrompt creates a new ChatEntry with prompt data
 func (c *ChatModel) AddPrompt(s string) {
-	newEntry := &ChatEntry{prompt: s}
-	c.history = append(c.history, *newEntry)
+	c.history = append(c.history, ChatEntry{prompt: s})
 }
 
 // AddResponse updates the latest ChatEntry with the data from ResponseStream. Must be called after AddPrompt
@@ -138,7 +137,7 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth int) int {
 	numChats := len(c.history)
 	for i := startingIndex; i < numChats; i++ {
 		prompt, response, error :=
-			c.history[i].createFormattedPrompt(marginText, promptStyle, maxPromptWidth),
+			c.history[i].formattedPrompt(marginText, promptStyle, maxPromptWidth),
 			c.history[i].response,
 			c.history[i].error
 

@@ -5,12 +5,16 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
+	"github.com/gregriff/ducky/models"
 	"github.com/gregriff/ducky/models/anthropic"
 	"github.com/gregriff/ducky/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 
 	zone "github.com/lrstanley/bubblezone"
 )
@@ -70,13 +74,43 @@ func runTUI(cmd *cobra.Command, args []string) {
 		os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
 	}
 
-	zone.NewGlobal()
-	tui := tui.NewTUI(
+	systemPrompt, modelName, reasoning, maxTokens, style :=
 		viper.GetString("system-prompt"),
 		viper.GetString("model"),
 		viper.GetBool("reasoning"),
 		viper.GetInt("max-tokens"),
-		viper.GetString("style"),
+		viper.GetString("style")
+
+	// if stdout is a pipe
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		model := tui.InitLLMClient(modelName, systemPrompt, maxTokens)
+		responseChan := make(chan models.StreamChunk)
+		input, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Println("error reading from stdin")
+			os.Exit(1)
+		}
+		prompt := strings.TrimSpace(string(input))
+		go model.DoStreamPromptCompletion(prompt, reasoning, responseChan)
+
+		var fullResponse strings.Builder
+		for chunk := range responseChan {
+			if !chunk.Reasoning {
+				fullResponse.WriteString(chunk.Content)
+			}
+		}
+		fmt.Print(fullResponse.String())
+		return
+	}
+
+	// Run TUI application
+	zone.NewGlobal()
+	tui := tui.NewTUI(
+		systemPrompt,
+		modelName,
+		reasoning,
+		maxTokens,
+		style,
 	)
 	tui.Start()
 }
