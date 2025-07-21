@@ -74,8 +74,6 @@ func runTUI(cmd *cobra.Command, args []string) {
 		os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
 	}
 
-	// sysPrompt := viper.GetString("system-prompt")
-
 	systemPrompt, modelName, reasoning, maxTokens, style :=
 		viper.GetString("system-prompt"),
 		viper.GetString("model"),
