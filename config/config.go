@@ -4,7 +4,6 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -37,8 +36,6 @@ func InitConfig(file string) {
 			fmt.Println("Error reading config file: ", err)
 			os.Exit(1)
 		}
-	} else {
-		log.Println("CONFIG FILE USED: ", viper.ConfigFileUsed())
 	}
 
 }

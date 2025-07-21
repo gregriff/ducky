@@ -27,15 +27,15 @@ gpt-cli-go
  /dist/
 
  # IDE/Editor files
- .vscode/
- .idea/
+.vscode/
+.idea/
  *.swp
  *.swo
  *~
 
  # OS generated files
- .DS_Store
- .DS_Store?
+.DS_Store
+.DS_Store?
  ._*
  .Spotlight-V100
  .Trashes
@@ -43,15 +43,14 @@ gpt-cli-go
  Thumbs.db
 
  # Environment variables
- .env
+.env
  .env.local
  .env.*.local
 
  # Log files
- *.log
-debug.log
+*.log
 
  # Temporary files
- *.tmp
- *.temp
+*.tmp
+*.temp
 PROMPTS.md

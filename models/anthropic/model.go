@@ -6,7 +6,7 @@ package anthropic
 import (
 	"context"
 
-	"github.com/anthropics/anthropic-sdk-go" // imported as anthropic
+	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/gregriff/ducky/models"
 )
 
@@ -19,7 +19,7 @@ type AnthropicModel struct {
 	// TODO: add usage field
 }
 
-func NewAnthropicModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message) *AnthropicModel {
+func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message) *AnthropicModel {
 	// allow message history to persist when user changes model being used
 	var messages []models.Message
 	if pastMessages != nil {
