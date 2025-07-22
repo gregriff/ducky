@@ -81,7 +81,7 @@ func runTUI(cmd *cobra.Command, args []string) {
 		viper.GetInt("max-tokens"),
 		viper.GetString("style")
 
-	// if stdout is a pipe
+	// if stdin is a pipe
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		model := tui.InitLLMClient(modelName, systemPrompt, maxTokens)
 		responseChan := make(chan models.StreamChunk)

@@ -89,7 +89,7 @@ func (m *TUIModel) Start() {
 	p := tea.NewProgram(m,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
-		// tea.WithReportFocus(),
+		tea.WithReportFocus(),
 	)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v", err)
@@ -110,7 +110,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds []tea.Cmd
 	)
 
-	// log.Printf("%#v\n%T", msg, msg)
+	// log.Printf("%#v", msg)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -174,6 +174,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.chat.Clear() // print something
+			m.model.DoClearChatHistory()
 			m.viewport.SetContent(m.chat.Render(m.viewport.Width))
 			if !m.textarea.Focused() {
 				return m, m.textarea.Focus()
@@ -256,6 +257,16 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+
+	case tea.BlurMsg:
+		if m.textarea.Focused() {
+			m.textarea.Blur()
+		}
+		return m, nil
+
+	// NOTE: on tmux, regaining focus from switching panes results in `tea.unknownCSISequenceMsg{0x1b, 0x5b, 0x49}`, so this is not run
+	case tea.FocusMsg:
+		return m, m.textarea.Focus()
 
 	case models.StreamChunk:
 		m.isReasoning = msg.Reasoning
