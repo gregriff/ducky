@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/bubbles/v2/spinner"
+	"github.com/charmbracelet/bubbles/v2/textarea"
+	"github.com/charmbracelet/bubbles/v2/viewport"
+	tea "github.com/charmbracelet/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/gregriff/ducky/models"
 	"github.com/gregriff/ducky/models/anthropic"
 	chat "github.com/gregriff/ducky/tui/chat"
 	styles "github.com/gregriff/ducky/tui/styles"
-	zone "github.com/lrstanley/bubblezone"
+	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 type TUIModel struct {
@@ -175,7 +175,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.chat.Clear() // print something
 			m.model.DoClearChatHistory()
-			m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+			m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 			if !m.textarea.Focused() {
 				return m, m.textarea.Focus()
 			}
@@ -199,8 +199,8 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			triggerScroll bool
 		)
 
-		switch msg.Button {
-		case tea.MouseButtonWheelUp:
+		switch msg.Mouse().Button {
+		case tea.MouseWheelUp:
 			// here we don't scroll up if the user has just pressed esc. On mac, the rapid scroll events build up, and may
 			// register after the esc handler, which results in the viewport scrolling up after going to the bottom.
 			// if time.Since(m.lastManualGoToBottom) < 800*time.Millisecond {
@@ -211,7 +211,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			triggerScroll, scrollKey = true, tea.KeyMsg{Type: tea.KeyUp}
 
-		case tea.MouseButtonWheelDown:
+		case tea.MouseWheelDown:
 			triggerScroll, scrollKey = true, tea.KeyMsg{Type: tea.KeyDown}
 		}
 
@@ -272,7 +272,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.isReasoning = msg.Reasoning
 		m.chat.AccumulateStream(msg.Content, msg.Reasoning, false)
 
-		m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+		m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 		if !m.preventScrollToBottom {
 			m.viewport.GotoBottom()
 		}
@@ -290,7 +290,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		m.chat.AddResponse()
 
-		m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+		m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 
 		if !m.preventScrollToBottom {
 			m.viewport.GotoBottom()
@@ -330,7 +330,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 		if !m.ready {
-			m.viewport = viewport.New(windowWidth, viewportHeight)
+			m.viewport = viewport.New(viewport.WithWidth(windowWidth), (viewport.WithHeight(viewportHeight)))
 			m.viewport.MouseWheelDelta = 2
 			markdownWidth := int(float64(windowWidth) * styles.WIDTH_PROPORTION_RESPONSE)
 			m.chat.Markdown.SetWidth(markdownWidth)
@@ -405,8 +405,8 @@ func (m *TUIModel) redraw() tea.Msg {
 }
 
 func (m *TUIModel) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
-	m.viewport.Width = windowWidth
-	m.viewport.Height = viewportHeight
+	m.viewport.SetWidth(windowWidth)
+	m.viewport.SetHeight(viewportHeight)
 
 	m.textarea.SetWidth(textAreaWidth)
 	m.chat.Markdown.SetWidth(windowWidth)
@@ -442,7 +442,7 @@ func (m *TUIModel) openPager() tea.Cmd {
 
 	// calculate the line Number clicked to open the pager in the exact same position as what is on screen
 	lineToOpenAt := max(m.viewport.YOffset-2, 0) // I don't know where the 2 comes from
-	_, writeErr := tmpFile.WriteString(m.chat.Render(m.viewport.Width))
+	_, writeErr := tmpFile.WriteString(m.chat.Render(m.viewport.Width()))
 	if writeErr != nil {
 		return func() tea.Msg {
 			return pagerError{err: writeErr}
@@ -495,7 +495,7 @@ func (m *TUIModel) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	}
 
 	m.chat.AddPrompt(prompt)
-	m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 	m.viewport.GotoBottom()
 	m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
 
@@ -543,7 +543,7 @@ func (m *TUIModel) headerView() string {
 		leftText = "ducky"
 	}
 	rightText := models.GetModelId(m.model)
-	maxWidth := m.viewport.Width - styles.HEADER_R_PADDING
+	maxWidth := m.viewport.Width() - styles.HEADER_R_PADDING
 	titleTextWidth := lipgloss.Width(leftText) + lipgloss.Width(rightText) + 2 // the two border chars
 	spacing := strings.Repeat(" ", max(5, maxWidth-titleTextWidth))
 

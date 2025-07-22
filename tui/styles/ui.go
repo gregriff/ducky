@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import "github.com/charmbracelet/lipgloss/v2"
 
 type TUIStylesStruct struct {
 	TitleBar,
@@ -9,7 +9,7 @@ type TUIStylesStruct struct {
 	TextAreaCursor lipgloss.Style
 }
 
-const (
+var (
 	ColorPrimary   = lipgloss.Color("86")      // cream
 	ColorSecondary = lipgloss.Color("#CCD4FF") // light blue
 )
