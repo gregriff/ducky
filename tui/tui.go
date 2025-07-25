@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/bubbles/v2/spinner"
+	"github.com/charmbracelet/bubbles/v2/textarea"
+	"github.com/charmbracelet/bubbles/v2/viewport"
+	tea "github.com/charmbracelet/bubbletea/v2"
+	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/gregriff/ducky/models"
 	"github.com/gregriff/ducky/models/anthropic"
 	chat "github.com/gregriff/ducky/tui/chat"
 	styles "github.com/gregriff/ducky/tui/styles"
-	zone "github.com/lrstanley/bubblezone"
+	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 type TUIModel struct {
@@ -59,8 +59,8 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 	ta.ShowLineNumbers = false
 	ta.KeyMap.InsertNewline.SetEnabled(false) // TODO: need this to be bound to shift+enter
 	ta.Placeholder = "Send a prompt..."
-	ta.FocusedStyle.Placeholder = styles.TUIStyles.PromptText
-	ta.FocusedStyle.CursorLine = styles.TUIStyles.TextAreaCursor
+	ta.Styles.Focused.Placeholder = styles.TUIStyles.PromptText
+	ta.Styles.Focused.CursorLine = styles.TUIStyles.TextAreaCursor
 	ta.Prompt = "┃ "
 	ta.CharLimit = 100_000
 	ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
@@ -89,7 +89,7 @@ func (m *TUIModel) Start() {
 	p := tea.NewProgram(m,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
-		// tea.WithReportFocus(),
+		tea.WithReportFocus(),
 	)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v", err)
@@ -110,10 +110,10 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds []tea.Cmd
 	)
 
-	// log.Printf("%#v\n%T", msg, msg)
+	// log.Printf("%#v", msg)
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		keyString := msg.String()
 
 		switch keyString {
@@ -150,22 +150,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 
-		if msg.Paste {
-			// here we grab the paste message before textarea gets it, in order to increase the height of the textarea if
-			// the pasted text has many lines
-			content, _ := clipboard.ReadAll()
-			newlines := strings.Count(content, "\n")
-			if newlines > m.textarea.Height() {
-				newHeight := clamp(newlines, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
-				windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
-				viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
-
-				m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
-				m.textarea.SetHeight(newHeight)      // this func clamps
-				return m.updateComponents(msg, cmds) // pass the paste msg to the textarea
-			}
-		}
-
 		// log.Println("STRING: ", keyString)
 
 		switch keyString {
@@ -174,7 +158,8 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.chat.Clear() // print something
-			m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+			m.model.DoClearChatHistory()
+			m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 			if !m.textarea.Focused() {
 				return m, m.textarea.Focus()
 			}
@@ -191,51 +176,39 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.promptLLM(input)
 		}
 
+	case tea.PasteMsg:
+		if m.isStreaming { // don't allow paste while streaming
+			return m, nil
+		}
+		// here we grab the paste message before textarea gets it, in order to increase the height of the textarea if
+		// the pasted text has many lines
+		content, _ := clipboard.ReadAll()
+		newlines := strings.Count(content, "\n")
+		if newlines > m.textarea.Height() {
+			newHeight := clamp(newlines, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
+			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
+			viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
+
+			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
+			m.textarea.SetHeight(newHeight)      // this func clamps
+			return m.updateComponents(msg, cmds) // pass the paste msg to the textarea
+		}
 	case tea.MouseMsg:
 		var (
 			scrollCmd     tea.Cmd
 			scrollKey     tea.KeyMsg
 			triggerScroll bool
 		)
+		mouse := msg.Mouse()
 
-		switch msg.Button {
-		case tea.MouseButtonWheelUp:
-			// here we don't scroll up if the user has just pressed esc. On mac, the rapid scroll events build up, and may
-			// register after the esc handler, which results in the viewport scrolling up after going to the bottom.
-			// if time.Since(m.lastManualGoToBottom) < 800*time.Millisecond {
-			// return m, nil
-			// }
-			if m.isStreaming { // allow user to scroll up during streaming and keep their position
-				m.preventScrollToBottom = true
-			}
-			triggerScroll, scrollKey = true, tea.KeyMsg{Type: tea.KeyUp}
-
-		case tea.MouseButtonWheelDown:
-			triggerScroll, scrollKey = true, tea.KeyMsg{Type: tea.KeyDown}
-		}
-
-		if triggerScroll {
-			if m.textarea.Focused() {
-				if m.textarea.LineCount() <= m.textarea.Height() {
-					m.viewport, scrollCmd = m.viewport.Update(msg)
-				} else {
-					m.textarea, scrollCmd = m.textarea.Update(scrollKey)
-				}
-			} else {
-				m.viewport, scrollCmd = m.viewport.Update(msg)
-			}
-			return m, scrollCmd
-		}
-
-		// handles all mouse EVENTS  TODO: re-evaluate for bugs
-		switch msg.Action {
-		case tea.MouseActionRelease:
-			if m.isStreaming || msg.Button != tea.MouseButtonLeft {
+		switch msg := msg.(type) {
+		case tea.MouseClickMsg:
+			// TODO: add right-click functionality
+			if m.isStreaming || msg.Button != tea.MouseLeft {
 				return m, nil
 			}
 
 			textareaFocused := m.textarea.Focused()
-			tea.Suspend()
 			if zone.Get("chatViewport").InBounds(msg) {
 				if m.chat.HistoryLen() == 0 {
 					break // could just return m, nil
@@ -255,13 +228,52 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.textarea.Focus()
 				}
 			}
+		case tea.MouseWheelMsg:
+			switch mouse.Button {
+			case tea.MouseWheelUp:
+				// here we don't scroll up if the user has just pressed esc. On mac, the rapid scroll events build up, and may
+				// register after the esc handler, which results in the viewport scrolling up after going to the bottom.
+				// if time.Since(m.lastManualGoToBottom) < 800*time.Millisecond {
+				// return m, nil
+				// }
+				if m.isStreaming { // allow user to scroll up during streaming and keep their position
+					m.preventScrollToBottom = true
+				}
+				triggerScroll, scrollKey = true, tea.KeyPressMsg{Code: tea.KeyUp}
+
+			case tea.MouseWheelDown:
+				triggerScroll, scrollKey = true, tea.KeyPressMsg{Code: tea.KeyDown}
+			}
+
+			if triggerScroll {
+				if m.textarea.Focused() {
+					if m.textarea.LineCount() <= m.textarea.Height() {
+						m.viewport, scrollCmd = m.viewport.Update(msg)
+					} else {
+						m.textarea, scrollCmd = m.textarea.Update(scrollKey)
+					}
+				} else {
+					m.viewport, scrollCmd = m.viewport.Update(msg)
+				}
+				return m, scrollCmd
+			}
 		}
+
+	case tea.BlurMsg:
+		if m.textarea.Focused() {
+			m.textarea.Blur()
+		}
+		return m, nil
+
+	// NOTE: on tmux, regaining focus from switching panes results in `tea.unknownCSISequenceMsg{0x1b, 0x5b, 0x49}`, so this is not run
+	case tea.FocusMsg:
+		return m, m.textarea.Focus()
 
 	case models.StreamChunk:
 		m.isReasoning = msg.Reasoning
 		m.chat.AccumulateStream(msg.Content, msg.Reasoning, false)
 
-		m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+		m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 		if !m.preventScrollToBottom {
 			m.viewport.GotoBottom()
 		}
@@ -279,7 +291,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		m.chat.AddResponse()
 
-		m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+		m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 
 		if !m.preventScrollToBottom {
 			m.viewport.GotoBottom()
@@ -319,7 +331,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 		if !m.ready {
-			m.viewport = viewport.New(windowWidth, viewportHeight)
+			m.viewport = viewport.New(viewport.WithWidth(windowWidth), (viewport.WithHeight(viewportHeight)))
 			m.viewport.MouseWheelDelta = 2
 			markdownWidth := int(float64(windowWidth) * styles.WIDTH_PROPORTION_RESPONSE)
 			m.chat.Markdown.SetWidth(markdownWidth)
@@ -394,8 +406,8 @@ func (m *TUIModel) redraw() tea.Msg {
 }
 
 func (m *TUIModel) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
-	m.viewport.Width = windowWidth
-	m.viewport.Height = viewportHeight
+	m.viewport.SetWidth(windowWidth)
+	m.viewport.SetHeight(viewportHeight)
 
 	m.textarea.SetWidth(textAreaWidth)
 	m.chat.Markdown.SetWidth(windowWidth)
@@ -431,7 +443,7 @@ func (m *TUIModel) openPager() tea.Cmd {
 
 	// calculate the line Number clicked to open the pager in the exact same position as what is on screen
 	lineToOpenAt := max(m.viewport.YOffset-2, 0) // I don't know where the 2 comes from
-	_, writeErr := tmpFile.WriteString(m.chat.Render(m.viewport.Width))
+	_, writeErr := tmpFile.WriteString(m.chat.Render(m.viewport.Width()))
 	if writeErr != nil {
 		return func() tea.Msg {
 			return pagerError{err: writeErr}
@@ -484,7 +496,7 @@ func (m *TUIModel) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	}
 
 	m.chat.AddPrompt(prompt)
-	m.viewport.SetContent(m.chat.Render(m.viewport.Width))
+	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 	m.viewport.GotoBottom()
 	m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
 
@@ -532,11 +544,15 @@ func (m *TUIModel) headerView() string {
 		leftText = "ducky"
 	}
 	rightText := models.GetModelId(m.model)
-	maxWidth := m.viewport.Width - styles.HEADER_R_PADDING
-	titleTextWidth := lipgloss.Width(leftText) + lipgloss.Width(rightText) + 2 // the two border chars
+	titleTextWidth := lipgloss.Width(leftText) +
+		lipgloss.Width(rightText) +
+		styles.H_PADDING*2 + // the left and right padding defined in TUIStyles.TitleBar
+		2 // the two border chars
+
+	maxWidth := max(0, m.viewport.Width())
 	spacing := strings.Repeat(" ", max(5, maxWidth-titleTextWidth))
 
-	return styles.TUIStyles.TitleBar.Width(max(0, maxWidth)).
+	return styles.TUIStyles.TitleBar.Width(maxWidth).
 		Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
 
 }
