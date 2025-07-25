@@ -1,37 +1,37 @@
 Binaries for programs and plugins
 gpt-cli-go
- *.exe
- *.exe~
- *.dll
- *.so
- *.dylib
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
  # Test binary, built with `go test -c`
- *.test
+*.test
 
  # Output of the go coverage tool, specifically when used with LiteIDE
- *.out
+*.out
 
  # Dependency directories (remove the comment below to include it)
  # vendor/
 
  # Go workspace file
- go.work
+go.work
 
  # Go pprof output
 .pprof/
 
  # Build output
- /bin/
- /pkg/
- /dist/
+/bin/
+/pkg/
+/dist/
 
  # IDE/Editor files
 .vscode/
 .idea/
- *.swp
- *.swo
- *~
+*.swp
+*.swo
+*~
 
  # OS generated files
 .DS_Store
@@ -44,8 +44,8 @@ gpt-cli-go
 
  # Environment variables
 .env
- .env.local
- .env.*.local
+.env.local
+.env.*.local
 
  # Log files
 *.log
