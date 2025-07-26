@@ -4,5 +4,7 @@ reasoning = true
 max-tokens = 2048
 style = "tokyo-night"
 
+pager = false
+
 anthropic-api-key = ""
 openai-api-key = ""

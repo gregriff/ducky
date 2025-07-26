@@ -26,6 +26,7 @@ type TUIModel struct {
 	systemPrompt    string
 	maxTokens       int
 	enableReasoning bool
+	enablePager     bool
 
 	// UI state
 	ready      bool
@@ -53,7 +54,7 @@ type streamComplete struct{}
 type pagerExit struct{}
 type pagerError struct{ err error }
 
-func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUIModel {
+func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string, enablePager bool) *TUIModel {
 	// create and style textarea
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
@@ -79,6 +80,7 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 
 		chat:         chat.NewChatModel(glamourStyle),
 		responseChan: make(chan models.StreamChunk),
+		enablePager:  enablePager,
 	}
 
 	t.model = InitLLMClient(modelName, systemPrompt, maxTokens)
@@ -217,6 +219,10 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if textareaFocused && m.textarea.LineCount() > styles.TEXTAREA_HEIGHT_COLLAPSED {
 					m.textarea.Blur() // TODO: need to collapse it as well
 				}
+				if !m.enablePager {
+					break
+				}
+
 				if time.Since(m.lastLeftClick) < 300*time.Millisecond {
 					return m, m.openPager()
 				} else {

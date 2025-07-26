@@ -41,7 +41,7 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	rootCmd.PersistentFlags().StringP("system-prompt", "p", "", "system prompt that will influence model responses")
+	rootCmd.PersistentFlags().StringP("system-prompt", "P", "", "system prompt that will influence model responses")
 	viper.BindPFlag("system-prompt", rootCmd.PersistentFlags().Lookup("system-prompt"))
 	viper.SetDefault("system-prompt", "You are a concise assistant to a software engineer")
 
@@ -62,6 +62,10 @@ func init() {
 
 	rootCmd.PersistentFlags().String("openai-api-key", "", "allows access to OpenAI models")
 	viper.BindPFlag("openai-api-key", rootCmd.PersistentFlags().Lookup("openai-api-key"))
+
+	rootCmd.PersistentFlags().BoolP("pager", "p", false, "enable opening the `less` pager when double-clicking the chat")
+	viper.BindPFlag("pager", rootCmd.PersistentFlags().Lookup("pager"))
+	viper.SetDefault("pager", false)
 }
 
 func runTUI(cmd *cobra.Command, args []string) {
@@ -74,12 +78,13 @@ func runTUI(cmd *cobra.Command, args []string) {
 		os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
 	}
 
-	systemPrompt, modelName, reasoning, maxTokens, style :=
+	systemPrompt, modelName, reasoning, maxTokens, style, enablePager :=
 		viper.GetString("system-prompt"),
 		viper.GetString("model"),
 		viper.GetBool("reasoning"),
 		viper.GetInt("max-tokens"),
-		viper.GetString("style")
+		viper.GetString("style"),
+		viper.GetBool("pager")
 
 	// if stdin is a pipe
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
@@ -111,6 +116,7 @@ func runTUI(cmd *cobra.Command, args []string) {
 		reasoning,
 		maxTokens,
 		style,
+		enablePager,
 	)
 	tui.Start()
 }
