@@ -46,6 +46,12 @@ type TUIModel struct {
 	responseChan chan models.StreamChunk
 
 	preventScrollToBottom bool
+
+	// rendering
+	contentBuilder,
+	headerBuilder strings.Builder
+	lastWidth          int
+	forceHeaderRefresh bool
 }
 
 // Bubbletea messages
@@ -293,6 +299,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.isStreaming = false
 		m.isReasoning = false
+		m.forceHeaderRefresh = true
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		m.chat.AddResponse()
@@ -429,7 +436,7 @@ func (m *TUIModel) getResizeParams(windowHeight, windowWidth int, taHeight *int)
 		textAreaHeight = m.textarea.Height()
 	}
 
-	headerHeight := lipgloss.Height(m.headerView())
+	headerHeight := lipgloss.Height(m.headerView(m.viewport.Width()))
 	verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
 
 	viewportHeight = windowHeight - verticalMarginHeight
@@ -532,34 +539,52 @@ func (m *TUIModel) View() string {
 	if !m.ready {
 		return "Initializing..."
 	}
-	return zone.Scan(
-		// NOTE: newlines needed between every component placed vertically (so they're not sidebyside and wrapped)
-		fmt.Sprintf("%s\n%s\n%s",
-			m.headerView(),
-			zone.Mark("chatViewport", m.viewport.View()),
-			zone.Mark("promptInput", styles.VP_TA_SPACING+m.textarea.View()),
-		),
-	)
+	m.contentBuilder.Reset()
+	m.contentBuilder.WriteString(
+		zone.Scan(
+			fmt.Sprintf("%s\n%s\n%s",
+				m.headerView(m.viewport.Width()),
+				zone.Mark("chatViewport", m.viewport.View()),
+				zone.Mark("promptInput", styles.VP_TA_SPACING+m.textarea.View()),
+			),
+		))
+	return m.contentBuilder.String()
 }
 
-func (m *TUIModel) headerView() string {
+// headerView returns the formatted header, reusing the last computed headerView result if the width hasn't changed and the spinner doesn't
+// need to be updated
+func (m *TUIModel) headerView(width int) string {
 	var leftText string
-	if m.isStreaming {
-		leftText = m.spinner.View()
-	} else {
+	if !m.isStreaming {
+		if width == m.lastWidth && !m.forceHeaderRefresh {
+			return m.headerBuilder.String()
+		}
 		leftText = "ducky"
+	} else {
+		leftText = m.spinner.View()
 	}
+	m.headerBuilder.Reset()
+	m.lastWidth = width
+
+	if m.forceHeaderRefresh {
+		m.forceHeaderRefresh = false
+	}
+
 	rightText := models.GetModelId(m.model)
 	titleTextWidth := lipgloss.Width(leftText) +
 		lipgloss.Width(rightText) +
 		styles.H_PADDING*2 + // the left and right padding defined in TUIStyles.TitleBar
 		2 // the two border chars
 
-	maxWidth := max(0, m.viewport.Width())
-	spacing := strings.Repeat(" ", max(5, maxWidth-titleTextWidth))
+	// TODO: should we be using termWidth or viewportWidth?
+	width = max(0, width)
+	style := styles.TUIStyles.TitleBar.Width(width)
+	spacing := strings.Repeat(" ", max(5, width-titleTextWidth))
 
-	return styles.TUIStyles.TitleBar.Width(maxWidth).
-		Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
+	m.headerBuilder.WriteString(
+		style.Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText)),
+	)
+	return m.headerBuilder.String()
 
 }
 
