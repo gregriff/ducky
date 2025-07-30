@@ -16,7 +16,6 @@ type LLM interface {
 	DoesSupportReasoning() bool
 }
 
-// TODO: handle errors
 func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, responseChan chan StreamChunk) error {
 	return llm.DoStreamPromptCompletion(prompt, enableReasoning, responseChan)
 }
@@ -53,4 +52,29 @@ type BaseLLM struct {
 type Message struct {
 	Role    string
 	Content string
+}
+
+// Pricing defines costs per million input or output tokens
+type Pricing struct {
+	PromptCost   float64 // per million tokens
+	ResponseCost float64 // per million tokens
+}
+
+// BoolPtr is a helper to set optional boolean fields.
+func BoolPtr(b bool) *bool {
+	return &b
+}
+
+// Bubbletea messsages
+
+// StreamChunk is the type of the channel used for communication between the API response handler and bubbletea (its also a bubbletea Msg)
+type StreamChunk struct {
+	Reasoning bool
+	Content   string
+}
+
+type StreamError struct{ ErrMsg string }
+
+func (e StreamError) Error() string {
+	return e.ErrMsg
 }

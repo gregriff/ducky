@@ -63,7 +63,7 @@ func init() {
 	rootCmd.PersistentFlags().String("openai-api-key", "", "allows access to OpenAI models")
 	viper.BindPFlag("openai-api-key", rootCmd.PersistentFlags().Lookup("openai-api-key"))
 
-	rootCmd.PersistentFlags().BoolP("pager", "p", false, "enable opening the `less` pager when double-clicking the chat")
+	rootCmd.PersistentFlags().BoolP("pager", "p", false, "enable opening the 'less' pager when double-clicking the chat")
 	viper.BindPFlag("pager", rootCmd.PersistentFlags().Lookup("pager"))
 	viper.SetDefault("pager", false)
 }

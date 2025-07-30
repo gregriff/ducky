@@ -8,7 +8,10 @@ import (
 )
 
 type OpenAIModelConfig struct {
-	models.BaseModelConfig
+	models.Pricing
+
+	// official ID from openai's API
+	Id                  string
 	SupportsTemperature *bool
 	Reasoning           *bool
 }
@@ -16,8 +19,8 @@ type OpenAIModelConfig struct {
 // GetOpenAIModelConfigs returns a map of OpenAI model names to properties about those models
 var OpenAIModelConfigs = map[string]OpenAIModelConfig{
 	"o3": {
-		BaseModelConfig: models.BaseModelConfig{
-			Id:           "o3",
+		Id: "o3",
+		Pricing: models.Pricing{
 			PromptCost:   10. / 1_000_000,
 			ResponseCost: 40. / 1_000_000,
 		},
@@ -25,8 +28,8 @@ var OpenAIModelConfigs = map[string]OpenAIModelConfig{
 		SupportsTemperature: models.BoolPtr(false),
 	},
 	"o4-mini": {
-		BaseModelConfig: models.BaseModelConfig{
-			Id:           "o4-mini",
+		Id: "o4-mini",
+		Pricing: models.Pricing{
 			PromptCost:   1.1 / 1_000_000,
 			ResponseCost: 4.4 / 1_000_000,
 		},
@@ -34,36 +37,36 @@ var OpenAIModelConfigs = map[string]OpenAIModelConfig{
 		SupportsTemperature: models.BoolPtr(false),
 	},
 	"4o-mini": {
-		BaseModelConfig: models.BaseModelConfig{
-			Id:           "gpt-4o-mini",
+		Id: "gpt-4o-mini",
+		Pricing: models.Pricing{
 			PromptCost:   .15 / 1_000_000,
 			ResponseCost: .075 / 1_000_000,
 		},
 	},
 	"4o": {
-		BaseModelConfig: models.BaseModelConfig{
-			Id:           "gpt-4o",
+		Id: "gpt-4o",
+		Pricing: models.Pricing{
 			PromptCost:   2.5 / 1_000_000,
 			ResponseCost: 10. / 1_000_000,
 		},
 	},
 	"4.1": {
-		BaseModelConfig: models.BaseModelConfig{
-			Id:           "gpt-4.1",
+		Id: "gpt-4.1",
+		Pricing: models.Pricing{
 			PromptCost:   2. / 1_000_000,
 			ResponseCost: 8. / 1_000_000,
 		},
 	},
 	"4.1-mini": {
-		BaseModelConfig: models.BaseModelConfig{
-			Id:           "gpt-4.1-mini",
+		Id: "gpt-4.1-mini",
+		Pricing: models.Pricing{
 			PromptCost:   .4 / 1_000_000,
 			ResponseCost: 1.6 / 1_000_000,
 		},
 	},
 	"4.1-nano": {
-		BaseModelConfig: models.BaseModelConfig{
-			Id:           "gpt-4.1-nano",
+		Id: "gpt-4.1-nano",
+		Pricing: models.Pricing{
 			PromptCost:   .1 / 1_000_000,
 			ResponseCost: .4 / 1_000_000,
 		},

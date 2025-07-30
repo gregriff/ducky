@@ -8,30 +8,33 @@ import (
 )
 
 type AnthropicModelConfig struct {
-	models.BaseModelConfig
+	models.Pricing
+
+	// official ID from anthropic's API
+	Id       string
 	Thinking *bool
 }
 
 // A map of Anthropic model names to properties about those models. Not to be modified
 var AnthropicModelConfigurations = map[string]AnthropicModelConfig{
 	"sonnet": {
-		BaseModelConfig: models.BaseModelConfig{
-			Id:           "claude-sonnet-4-20250514",
+		Id: "claude-sonnet-4-20250514",
+		Pricing: models.Pricing{
 			PromptCost:   3. / 1_000_000,
 			ResponseCost: 15. / 1_000_000,
 		},
 		Thinking: models.BoolPtr(true),
 	},
 	"haiku": {
-		BaseModelConfig: models.BaseModelConfig{
-			Id:           "claude-3-5-haiku-latest",
+		Id: "claude-3-5-haiku-latest",
+		Pricing: models.Pricing{
 			PromptCost:   .8 / 1_000_000,
 			ResponseCost: 4. / 1_000_000,
 		},
 	},
 	"opus": {
-		BaseModelConfig: models.BaseModelConfig{
-			Id:           "claude-opus-4-20250514",
+		Id: "claude-opus-4-20250514",
+		Pricing: models.Pricing{
 			PromptCost:   15. / 1_000_000,
 			ResponseCost: 75. / 1_000_000,
 		},
