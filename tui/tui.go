@@ -314,8 +314,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.ready {
 			m.viewport = viewport.New(viewport.WithWidth(windowWidth), (viewport.WithHeight(viewportHeight)))
 			m.viewport.MouseWheelDelta = 2
-			markdownWidth := int(float64(windowWidth) * styles.WIDTH_PROPORTION_RESPONSE)
-			m.chat.Markdown.SetWidth(markdownWidth)
 			m.viewport.SetContent(m.chat.Render(windowWidth))
 			m.viewport.GotoBottom()
 			m.textarea.SetWidth(textAreaWidth)
@@ -391,7 +389,6 @@ func (m *TUIModel) resizeComponents(windowWidth, textAreaWidth, viewportHeight i
 	m.viewport.SetHeight(viewportHeight)
 
 	m.textarea.SetWidth(textAreaWidth)
-	m.chat.Markdown.SetWidth(windowWidth)
 	m.viewport.SetContent(m.chat.Render(windowWidth))
 }
 

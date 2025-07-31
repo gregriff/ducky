@@ -16,7 +16,6 @@ type MarkdownRenderer struct {
 	wrapper  wrap.Wrap
 
 	style string
-	width int
 }
 
 // NewMarkdownRenderer creates the struct but Markdown cannot be rendered until .SetWidth is called
@@ -35,13 +34,12 @@ func NewMarkdownRenderer(glamourStyle string) *MarkdownRenderer {
 	return &MarkdownRenderer{
 		style:    glamourStyle,
 		renderer: renderer,
-		width:    80,
 	}
 }
 
 // Render safely renders Markdown for a given width
-func (md *MarkdownRenderer) Render(markdown []byte) []byte {
-	wrapper := wordwrap.NewWriter(md.width)
+func (md *MarkdownRenderer) Render(markdown []byte, width int) []byte {
+	wrapper := wordwrap.NewWriter(width)
 	// wrapper.TabWidth = 4
 
 	rendered, err := md.renderer.RenderBytes(markdown)
@@ -52,9 +50,4 @@ func (md *MarkdownRenderer) Render(markdown []byte) []byte {
 	}
 	wrapper.Close()
 	return wrapper.Bytes()
-}
-
-// SetWidth immediately resizes the renderable area of the screen
-func (md *MarkdownRenderer) SetWidth(width int) {
-	md.width = width
 }
