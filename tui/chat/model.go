@@ -2,7 +2,6 @@ package tui
 
 import (
 	"bytes"
-	"strings"
 
 	"github.com/charmbracelet/lipgloss/v2"
 	styles "github.com/gregriff/ducky/tui/styles"
@@ -14,7 +13,7 @@ type ChatModel struct {
 	stream    *ResponseStream
 	TotalCost float64
 
-	renderedHistory  strings.Builder // stores accumulated chat history rendered in markdown and color for a specific width
+	renderedHistory  bytes.Buffer // stores accumulated chat history rendered in markdown and color for a specific width
 	Markdown         *MarkdownRenderer
 	currentWrapWidth int // # of term columns the stored prompts are word-wrapped to fit into
 	numChatsRendered int
@@ -92,7 +91,7 @@ func (c *ChatModel) AddResponse() {
 
 // Render returns a string of the entire chat history in markdown, wrapped to a certain width. If the vpWidth hasn't changed since the
 // last call to this func, the pre-rendered chat history will be reused and the ResponseStream will be appended to it
-func (c *ChatModel) Render(vpWidth int) string {
+func (c *ChatModel) Render(vpWidth int) (content string) {
 	numPrompts, numResponses := c.numPrompts(), c.numResponses()
 	if numPrompts == 0 && numResponses == 0 {
 		return ""
@@ -110,13 +109,17 @@ func (c *ChatModel) Render(vpWidth int) string {
 		}
 	}
 
-	renderedHistory := c.renderedHistory.String()
-
 	// Render current response being streamed
 	if c.stream.Len() > 0 {
-		renderedHistory += string(c.renderCurrentResponse(responseWidth))
+		// reduce copying by building onto renderedHistory buffer then truncating it after we get the final result
+		baseLen := c.renderedHistory.Len()
+		c.renderedHistory.Write(c.renderCurrentResponse(responseWidth))
+		content = c.renderedHistory.String()
+		c.renderedHistory.Truncate(baseLen)
+	} else {
+		content = c.renderedHistory.String()
 	}
-	return renderedHistory
+	return
 }
 
 // renderChatHistory iterates through the chat history starting at the given index and writes to .renderedHistory text to display
