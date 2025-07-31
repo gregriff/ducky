@@ -9,8 +9,9 @@ import (
 type ChatEntry struct {
 	prompt,
 	reasoning,
-	response,
 	error string
+
+	response []byte
 }
 
 // formattedPrompt creates a prompt string formatted with margin and padding.

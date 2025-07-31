@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss/v2"
@@ -21,8 +22,8 @@ type ChatModel struct {
 
 // ResponseStream is like a buffer for the text sent from an LLM API. Once a response ends this data is moved into a ChatEntry
 type ResponseStream struct {
-	reasoning strings.Builder
-	response  strings.Builder
+	reasoning bytes.Buffer
+	response  bytes.Buffer
 	error     string
 }
 
@@ -79,7 +80,7 @@ func (c *ChatModel) AddResponse() {
 
 	curEntry := &c.history[len(c.history)-1]
 	curEntry.reasoning = res.reasoning.String()
-	curEntry.response = res.response.String()
+	curEntry.response = res.response.Bytes()
 	curEntry.error = res.error
 
 	res.reasoning.Reset()
@@ -121,7 +122,7 @@ func (c *ChatModel) Render(vpWidth int) string {
 
 	// Render current response being streamed
 	if c.stream.Len() > 0 {
-		renderedHistory += c.renderCurrentResponse()
+		renderedHistory += string(c.renderCurrentResponse())
 	}
 	return renderedHistory
 }
@@ -143,21 +144,21 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth int) int {
 
 		c.renderedHistory.WriteString(prompt)
 		c.renderedHistory.WriteString("\n")
-		c.renderedHistory.WriteString(c.Markdown.Render(response))
+		c.renderedHistory.Write(c.Markdown.Render(response))
 
 		if len(error) > 0 {
-			c.renderedHistory.WriteString(c.Markdown.Render(error))
+			c.renderedHistory.Write(c.Markdown.Render([]byte(error)))
 		}
 	}
 	return numChats
 }
 
-func (c *ChatModel) renderCurrentResponse() string {
+func (c *ChatModel) renderCurrentResponse() []byte {
 	if c.stream.response.Len() > 0 {
-		return c.Markdown.Render(c.stream.response.String())
+		return c.Markdown.Render(c.stream.response.Bytes())
 	}
 	// TODO: don't print reasoning if model doesn't support (haiku) or user said no reasoning
-	return c.Markdown.Render(c.stream.reasoning.String())
+	return c.Markdown.Render(c.stream.reasoning.Bytes())
 
 }
 
