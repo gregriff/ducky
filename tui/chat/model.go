@@ -156,7 +156,8 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int, rend
 	}
 
 	if renderLastResponse {
-		lastResponse := c.history[startingIndex-1].response
+		lastResponseIdx := max(startingIndex-1, 0)
+		lastResponse := c.history[lastResponseIdx].response
 		c.renderedHistory.Write(c.Markdown.Render(lastResponse, resWidth))
 	}
 	return
@@ -174,6 +175,9 @@ func (c *ChatModel) renderCurrentResponse(width int) []byte {
 func (c *ChatModel) Clear() {
 	// TODO: save unsaved history in temporary sqlite DB or in-memory for accidental clears
 	c.history = c.history[:0]
+	c.numChatsRendered = 0
+	// c.renderedLastResponse = false
+	c.renderedHistory.Reset()
 }
 
 func (c *ChatModel) HistoryLen() int {
