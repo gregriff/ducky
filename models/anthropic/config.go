@@ -33,7 +33,7 @@ var AnthropicModelConfigurations = map[string]AnthropicModelConfig{
 		},
 	},
 	"opus": {
-		Id: "claude-opus-4-20250514",
+		Id: "claude-opus-4-1-20250805",
 		Pricing: models.Pricing{
 			PromptCost:   15. / 1_000_000,
 			ResponseCost: 75. / 1_000_000,
