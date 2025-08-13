@@ -3,68 +3,63 @@ package tui
 import (
 	"fmt"
 	"os"
-	"sync"
 
 	"github.com/charmbracelet/glamour"
+	"github.com/muesli/reflow/wrap"
 )
 
 // MarkdownRenderer wraps glamour.TermRenderer and handles Markdown rendering
 // as well as resizing the renderable area of the screen.
 type MarkdownRenderer struct {
-	mtx      sync.RWMutex
 	renderer *glamour.TermRenderer
+	wrapper  wrap.Wrap
+	curWidth int
 
-	style        string
-	currentWidth int
+	style string
 }
 
 // NewMarkdownRenderer creates the struct but Markdown cannot be rendered until .SetWidth is called
 func NewMarkdownRenderer(glamourStyle string) *MarkdownRenderer {
-	return &MarkdownRenderer{style: glamourStyle}
+	md := MarkdownRenderer{
+		style:    glamourStyle,
+		curWidth: 80,
+	}
+	md.createNewRenderer()
+	return &md
 }
 
-// Render safely renders Markdown
-func (md *MarkdownRenderer) Render(markdown string) string {
-	// this func could be called while a window resize is happening, so we lock
-	md.mtx.RLock()
-	defer md.mtx.RUnlock()
-
-	renderer := md.renderer
-	if renderer == nil {
-		return markdown
-	}
-
-	output, err := renderer.Render(markdown)
-	if err != nil {
-		return markdown // Fallback to raw markdown
-	}
-	return output
-}
-
-// SetWidth immediately resizes the renderable area of the screen
-func (md *MarkdownRenderer) SetWidth(width int) {
-	md.mtx.Lock()
-	defer md.mtx.Unlock()
-
-	md.createRenderer(width)
-}
-
-// createRenderer actually does the work to enable Markdown to be rendered at a smaller or larger width.
-// Re-instantiation is needed because glamour does not export the ansiOptions field
-func (md *MarkdownRenderer) createRenderer(width int) {
-	if md.currentWidth == width {
-		return // No change needed
-	}
+// createNewRenderer creates or re-creates the glamour.TermRenderer, using the curWidth and style fields
+func (md *MarkdownRenderer) createNewRenderer() {
 	renderer, err := glamour.NewTermRenderer(
 		// glamour.WithAutoStyle(), // this results in a hanging func call because of an ENOTTY
 		glamour.WithStylePath(md.style),
 		glamour.WithEmoji(),
-		glamour.WithWordWrap(width),
+		glamour.WithWordWrap(md.curWidth),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating Markdown renderer: %v\n", err)
 		os.Exit(1)
 	}
 	md.renderer = renderer
-	md.currentWidth = width
+}
+
+// SetStyle will be used when the user wants to change the rendering style mid-session.
+// The application should not allow the user to do this during rendering, because I don't want to add lock overhead
+func (md *MarkdownRenderer) SetStyle(newStyle string) {
+	md.style = newStyle
+}
+
+// Render safely renders Markdown for a given width
+func (md *MarkdownRenderer) Render(markdown []byte, width int) []byte {
+	// if the width has changed, recreate the renderer
+	if width != md.curWidth {
+		md.curWidth = width
+		md.createNewRenderer()
+	}
+
+	rendered, err := md.renderer.RenderBytes(markdown)
+	if err != nil {
+		return markdown
+	}
+	return rendered
 }

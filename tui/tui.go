@@ -2,10 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/v2/spinner"
@@ -26,7 +23,6 @@ type TUIModel struct {
 	systemPrompt    string
 	maxTokens       int
 	enableReasoning bool
-	enablePager     bool
 
 	// UI state
 	ready      bool
@@ -35,10 +31,6 @@ type TUIModel struct {
 	spinner    spinner.Model
 	windowSize tea.WindowSizeMsg
 
-	lastLeftClick time.Time
-	// lastManualGoToBottom time.Time
-	pagerTempfile string
-
 	// Chat state
 	chat *chat.ChatModel
 	isStreaming,
@@ -46,15 +38,18 @@ type TUIModel struct {
 	responseChan chan models.StreamChunk
 
 	preventScrollToBottom bool
+
+	// rendering
+	contentBuilder,
+	headerBuilder strings.Builder
+	lastWidth          int
+	forceHeaderRefresh bool
 }
 
 // Bubbletea messages
 type streamComplete struct{}
 
-type pagerExit struct{}
-type pagerError struct{ err error }
-
-func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string, enablePager bool) *TUIModel {
+func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUIModel {
 	// create and style textarea
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
@@ -80,7 +75,6 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxToke
 
 		chat:         chat.NewChatModel(glamourStyle),
 		responseChan: make(chan models.StreamChunk),
-		enablePager:  enablePager,
 	}
 
 	t.model = InitLLMClient(modelName, systemPrompt, maxTokens)
@@ -219,15 +213,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if textareaFocused && m.textarea.LineCount() > styles.TEXTAREA_HEIGHT_COLLAPSED {
 					m.textarea.Blur() // TODO: need to collapse it as well
 				}
-				if !m.enablePager {
-					break
-				}
-
-				if time.Since(m.lastLeftClick) < 300*time.Millisecond {
-					return m, m.openPager()
-				} else {
-					m.lastLeftClick = time.Now()
-				}
 
 			} else if zone.Get("promptInput").InBounds(msg) {
 				if !textareaFocused {
@@ -293,6 +278,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.isStreaming = false
 		m.isReasoning = false
+		m.forceHeaderRefresh = true
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		m.chat.AddResponse()
@@ -319,17 +305,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, spCmd
 
-	case pagerExit:
-		// pager lets term control mouse for selecting/copying. Regain those controls and fullscreen
-		return m.cleanUpPager()
-
-	case pagerError:
-		pagerErr := msg.err.Error()
-		if pagerErr != "exit status 2" {
-			m.textarea.InsertString(fmt.Sprintf("Pager Error: %s\n", pagerErr))
-		}
-		return m.cleanUpPager()
-
 	case tea.WindowSizeMsg:
 		m.windowSize = msg
 		windowHeight, windowWidth := msg.Height, msg.Width
@@ -339,8 +314,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.ready {
 			m.viewport = viewport.New(viewport.WithWidth(windowWidth), (viewport.WithHeight(viewportHeight)))
 			m.viewport.MouseWheelDelta = 2
-			markdownWidth := int(float64(windowWidth) * styles.WIDTH_PROPORTION_RESPONSE)
-			m.chat.Markdown.SetWidth(markdownWidth)
 			m.viewport.SetContent(m.chat.Render(windowWidth))
 			m.viewport.GotoBottom()
 			m.textarea.SetWidth(textAreaWidth)
@@ -416,7 +389,6 @@ func (m *TUIModel) resizeComponents(windowWidth, textAreaWidth, viewportHeight i
 	m.viewport.SetHeight(viewportHeight)
 
 	m.textarea.SetWidth(textAreaWidth)
-	m.chat.Markdown.SetWidth(windowWidth)
 	m.viewport.SetContent(m.chat.Render(windowWidth))
 }
 
@@ -429,64 +401,12 @@ func (m *TUIModel) getResizeParams(windowHeight, windowWidth int, taHeight *int)
 		textAreaHeight = m.textarea.Height()
 	}
 
-	headerHeight := lipgloss.Height(m.headerView())
+	headerHeight := lipgloss.Height(m.headerView(m.viewport.Width()))
 	verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
 
 	viewportHeight = windowHeight - verticalMarginHeight
 	textAreaWidth = windowWidth - styles.H_PADDING
 	return viewportHeight, textAreaWidth
-}
-
-// openPager opens the `less` pager on the entire chat history, at the exact position the user is currently looking at
-func (m *TUIModel) openPager() tea.Cmd {
-	tmpFile, err := os.CreateTemp(".", "pager-*")
-	if err != nil {
-		return func() tea.Msg {
-			return pagerError{err: err}
-		}
-	}
-	m.pagerTempfile = tmpFile.Name()
-
-	// calculate the line Number clicked to open the pager in the exact same position as what is on screen
-	lineToOpenAt := max(m.viewport.YOffset-2, 0) // I don't know where the 2 comes from
-	_, writeErr := tmpFile.WriteString(m.chat.Render(m.viewport.Width()))
-	if writeErr != nil {
-		return func() tea.Msg {
-			return pagerError{err: writeErr}
-		}
-	}
-	cmd := exec.Command(
-		"less",
-		fmt.Sprintf("+%d", lineToOpenAt),
-		"--use-color",       // display ANSI colors
-		"--chop-long-lines", // dont wrap long lines
-		"--quit-on-intr",    // quit on ctrl+c
-		"--incsearch",       // incremental search
-		fmt.Sprintf("--prompt=%s", `?eEOF ?m(response %i of %m).`),
-		m.pagerTempfile,
-	)
-	cmd.Env = append(os.Environ(),
-		"LESSSECURE=1", // disables in-pager shell, editing, pipe etc.
-	)
-	onPagerExit := func(err error) tea.Msg {
-		if err != nil {
-			return pagerError{err: err}
-		}
-		return pagerExit{}
-	}
-	return tea.ExecProcess(cmd, onPagerExit)
-}
-
-func (m *TUIModel) cleanUpPager() (tea.Model, tea.Cmd) {
-	return m, tea.Batch(tea.EnterAltScreen, tea.EnableMouseCellMotion, m.removeTempFile)
-}
-
-func (m *TUIModel) removeTempFile() tea.Msg {
-	err := os.Remove(m.pagerTempfile)
-	if err != nil {
-		m.textarea.InsertString(fmt.Sprintf("Error deleting tempfile: %e\n", err))
-	}
-	return nil
 }
 
 // promptLLM makes the LLM API request, handles TUI state and begins listening for the response stream
@@ -532,34 +452,52 @@ func (m *TUIModel) View() string {
 	if !m.ready {
 		return "Initializing..."
 	}
-	return zone.Scan(
-		// NOTE: newlines needed between every component placed vertically (so they're not sidebyside and wrapped)
-		fmt.Sprintf("%s\n%s\n%s",
-			m.headerView(),
-			zone.Mark("chatViewport", m.viewport.View()),
-			zone.Mark("promptInput", styles.VP_TA_SPACING+m.textarea.View()),
-		),
-	)
+	m.contentBuilder.Reset()
+	m.contentBuilder.WriteString(
+		zone.Scan(
+			fmt.Sprintf("%s\n%s\n%s",
+				m.headerView(m.viewport.Width()),
+				zone.Mark("chatViewport", m.viewport.View()),
+				zone.Mark("promptInput", styles.VP_TA_SPACING+m.textarea.View()),
+			),
+		))
+	return m.contentBuilder.String()
 }
 
-func (m *TUIModel) headerView() string {
+// headerView returns the formatted header, reusing the last computed headerView result if the width hasn't changed and the spinner doesn't
+// need to be updated
+func (m *TUIModel) headerView(width int) string {
 	var leftText string
-	if m.isStreaming {
-		leftText = m.spinner.View()
-	} else {
+	if !m.isStreaming {
+		if width == m.lastWidth && !m.forceHeaderRefresh {
+			return m.headerBuilder.String()
+		}
 		leftText = "ducky"
+	} else {
+		leftText = m.spinner.View()
 	}
+	m.headerBuilder.Reset()
+	m.lastWidth = width
+
+	if m.forceHeaderRefresh {
+		m.forceHeaderRefresh = false
+	}
+
 	rightText := models.GetModelId(m.model)
 	titleTextWidth := lipgloss.Width(leftText) +
 		lipgloss.Width(rightText) +
 		styles.H_PADDING*2 + // the left and right padding defined in TUIStyles.TitleBar
 		2 // the two border chars
 
-	maxWidth := max(0, m.viewport.Width())
-	spacing := strings.Repeat(" ", max(5, maxWidth-titleTextWidth))
+	// TODO: should we be using termWidth or viewportWidth?
+	width = max(0, width)
+	style := styles.TUIStyles.TitleBar.Width(width)
+	spacing := strings.Repeat(" ", max(5, width-titleTextWidth))
 
-	return styles.TUIStyles.TitleBar.Width(maxWidth).
-		Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText))
+	m.headerBuilder.WriteString(
+		style.Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText)),
+	)
+	return m.headerBuilder.String()
 
 }
 
