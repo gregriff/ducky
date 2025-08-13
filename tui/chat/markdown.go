@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/charmbracelet/glamour"
-	"github.com/muesli/reflow/wordwrap"
 	"github.com/muesli/reflow/wrap"
 )
 
@@ -14,40 +13,53 @@ import (
 type MarkdownRenderer struct {
 	renderer *glamour.TermRenderer
 	wrapper  wrap.Wrap
+	curWidth int
 
 	style string
 }
 
 // NewMarkdownRenderer creates the struct but Markdown cannot be rendered until .SetWidth is called
 func NewMarkdownRenderer(glamourStyle string) *MarkdownRenderer {
+	md := MarkdownRenderer{
+		style:    glamourStyle,
+		curWidth: 80,
+	}
+	md.createNewRenderer()
+	return &md
+}
+
+// createNewRenderer creates or re-creates the glamour.TermRenderer, using the curWidth and style fields
+func (md *MarkdownRenderer) createNewRenderer() {
 	renderer, err := glamour.NewTermRenderer(
 		// glamour.WithAutoStyle(), // this results in a hanging func call because of an ENOTTY
-		glamour.WithStylePath(glamourStyle),
+		glamour.WithStylePath(md.style),
 		glamour.WithEmoji(),
+		glamour.WithWordWrap(md.curWidth),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating Markdown renderer: %v\n", err)
 		os.Exit(1)
 	}
-	// wrapper := wrap.NewWriter(80)
-	// wrapper.TabWidth = 4
-	return &MarkdownRenderer{
-		style:    glamourStyle,
-		renderer: renderer,
-	}
+	md.renderer = renderer
+}
+
+// SetStyle will be used when the user wants to change the rendering style mid-session.
+// The application should not allow the user to do this during rendering, because I don't want to add lock overhead
+func (md *MarkdownRenderer) SetStyle(newStyle string) {
+	md.style = newStyle
 }
 
 // Render safely renders Markdown for a given width
 func (md *MarkdownRenderer) Render(markdown []byte, width int) []byte {
-	wrapper := wordwrap.NewWriter(width)
-	// wrapper.TabWidth = 4
+	// if the width has changed, recreate the renderer
+	if width != md.curWidth {
+		md.curWidth = width
+		md.createNewRenderer()
+	}
 
 	rendered, err := md.renderer.RenderBytes(markdown)
 	if err != nil {
-		wrapper.Write(markdown) // Fallback to raw markdown
-	} else {
-		wrapper.Write(rendered)
+		return markdown
 	}
-	wrapper.Close()
-	return wrapper.Bytes()
+	return rendered
 }
