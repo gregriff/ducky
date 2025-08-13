@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -19,9 +20,13 @@ func InitConfig(file string) {
 	viper.AddConfigPath(getConfigDir()) // $XDG_HOME_CONFIG takes precedence over config in repo dir
 	viper.AddConfigPath("./config")     // in the repo
 
+	// allow env vars to override config file
+	viper.SetEnvPrefix("ducky")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.AutomaticEnv()
+
 	if file != "" {
 		viper.SetConfigFile(file)
-		return
 	}
 
 	if err := viper.ReadInConfig(); err != nil {

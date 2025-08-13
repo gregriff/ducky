@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var cfgFile string
+var configFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -46,8 +46,8 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 	cobra.OnInitialize(func() {
-		config.InitConfig(cfgFile)
+		config.InitConfig(configFile)
 	})
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $XDG_CONFIG_HOME/ducky/ducky.toml)")
+	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is $XDG_CONFIG_HOME/ducky/ducky.toml)")
 }
