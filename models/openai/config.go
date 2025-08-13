@@ -36,38 +36,38 @@ var OpenAIModelConfigs = map[string]OpenAIModelConfig{
 		Reasoning:           models.BoolPtr(true),
 		SupportsTemperature: models.BoolPtr(false),
 	},
-	"4o-mini": {
+	"gpt-4o-mini": {
 		Id: "gpt-4o-mini",
 		Pricing: models.Pricing{
 			PromptCost:   .15 / 1_000_000,
 			ResponseCost: .075 / 1_000_000,
 		},
 	},
-	"4o": {
+	"gpt-4o": {
 		Id: "gpt-4o",
 		Pricing: models.Pricing{
 			PromptCost:   2.5 / 1_000_000,
 			ResponseCost: 10. / 1_000_000,
 		},
 	},
-	"4.1": {
-		Id: "gpt-4.1",
+	"gpt-5": {
+		Id: "gpt-5",
 		Pricing: models.Pricing{
-			PromptCost:   2. / 1_000_000,
-			ResponseCost: 8. / 1_000_000,
+			PromptCost:   1.25 / 1_000_000,
+			ResponseCost: 10. / 1_000_000,
 		},
 	},
-	"4.1-mini": {
-		Id: "gpt-4.1-mini",
+	"gpt-5-mini": {
+		Id: "gpt-5-mini",
 		Pricing: models.Pricing{
-			PromptCost:   .4 / 1_000_000,
-			ResponseCost: 1.6 / 1_000_000,
+			PromptCost:   .25 / 1_000_000,
+			ResponseCost: 2. / 1_000_000,
 		},
 	},
-	"4.1-nano": {
-		Id: "gpt-4.1-nano",
+	"gpt-5-nano": {
+		Id: "gpt-5-nano",
 		Pricing: models.Pricing{
-			PromptCost:   .1 / 1_000_000,
+			PromptCost:   .05 / 1_000_000,
 			ResponseCost: .4 / 1_000_000,
 		},
 	},
