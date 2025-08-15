@@ -99,7 +99,6 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 	}
 
 	if stream.Err() != nil {
-		// responseChan <- models.StreamChunk{Reasoning: false, Content: fmt.Sprintf("\n\n[Error: %v]", stream.Err())}
 		return models.StreamError{ErrMsg: stream.Err().Error()}
 	}
 

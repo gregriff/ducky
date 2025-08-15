@@ -13,18 +13,18 @@ type OpenAIModelConfig struct {
 	// official ID from openai's API
 	Id                  string
 	SupportsTemperature *bool
-	Reasoning           *bool
+	SupportsReasoning   *bool
 }
 
 // GetOpenAIModelConfigs returns a map of OpenAI model names to properties about those models
-var OpenAIModelConfigs = map[string]OpenAIModelConfig{
+var OpenAIModelConfigurations = map[string]OpenAIModelConfig{
 	"o3": {
 		Id: "o3",
 		Pricing: models.Pricing{
 			PromptCost:   10. / 1_000_000,
 			ResponseCost: 40. / 1_000_000,
 		},
-		Reasoning:           models.BoolPtr(true),
+		SupportsReasoning:   models.BoolPtr(true),
 		SupportsTemperature: models.BoolPtr(false),
 	},
 	"o4-mini": {
@@ -33,7 +33,7 @@ var OpenAIModelConfigs = map[string]OpenAIModelConfig{
 			PromptCost:   1.1 / 1_000_000,
 			ResponseCost: 4.4 / 1_000_000,
 		},
-		Reasoning:           models.BoolPtr(true),
+		SupportsReasoning:   models.BoolPtr(true),
 		SupportsTemperature: models.BoolPtr(false),
 	},
 	"gpt-4o-mini": {
@@ -56,6 +56,7 @@ var OpenAIModelConfigs = map[string]OpenAIModelConfig{
 			PromptCost:   1.25 / 1_000_000,
 			ResponseCost: 10. / 1_000_000,
 		},
+		SupportsReasoning: models.BoolPtr(true),
 	},
 	"gpt-5-mini": {
 		Id: "gpt-5-mini",
@@ -75,9 +76,9 @@ var OpenAIModelConfigs = map[string]OpenAIModelConfig{
 
 // ValidateModelName validates that a modelName is one of our supported models. If so, it returns the modelId
 func ValidateModelName(modelName string) error {
-	if _, exists := OpenAIModelConfigs[modelName]; !exists {
+	if _, exists := OpenAIModelConfigurations[modelName]; !exists {
 		var validNames []string
-		for name := range OpenAIModelConfigs {
+		for name := range OpenAIModelConfigurations {
 			validNames = append(validNames, name)
 		}
 		err := fmt.Errorf("invalid model name '%s'. Valid options: %s", modelName, strings.Join(validNames, ", "))
@@ -89,7 +90,7 @@ func ValidateModelName(modelName string) error {
 // GetValidModelNames returns the keys of OpenAIModelConfigs, our supported OpenAI models
 func GetValidModelNames() []string {
 	var names []string
-	for name := range OpenAIModelConfigs {
+	for name := range OpenAIModelConfigurations {
 		names = append(names, name)
 	}
 	return names
