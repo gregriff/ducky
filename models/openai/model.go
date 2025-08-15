@@ -58,13 +58,14 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 	maxTokens = int64(llm.MaxTokens)
 	fullResponseText := ""
 	if reasoningSupported = llm.ModelConfig.SupportsReasoning; reasoningSupported != nil && *reasoningSupported && enableReasoning {
-		reasoning = openai.ReasoningParam{Effort: shared.ReasoningEffortHigh}
+		reasoning = openai.ReasoningParam{Effort: shared.ReasoningEffortMinimal} // can be minimal, low, medium, high
 		// if maxTokens <= 1024 {
 		// 	maxTokens = 2048
 		// } else {
 		// 	maxTokens *= 2
 		// }
 	}
+	log.Println("init stream")
 
 	// https://pkg.go.dev/github.com/openai/openai-go/v2/responses#ResponseNewParams
 	stream := llm.Client.Responses.NewStreaming(context.TODO(), responses.ResponseNewParams{
@@ -100,15 +101,18 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 		case responses.ResponseReasoningTextDoneEvent:
 			log.Println("response reasoning text done event: ")
 		case responses.ResponseReasoningTextDeltaEvent:
+			log.Println("reasoning delta event: ", eventVariant.Delta)
 			fullResponseText += eventVariant.Delta
 			responseChan <- models.StreamChunk{Reasoning: true, Content: chunk.Delta}
 		case responses.ResponseTextDeltaEvent:
+			log.Println("response delta event: ", eventVariant.Delta)
 			fullResponseText += eventVariant.Delta
 			responseChan <- models.StreamChunk{Reasoning: false, Content: chunk.Delta}
 		}
 	}
 
 	if stream.Err() != nil {
+		log.Println("OPENAI STREAMING ERROR: ", stream.Err().Error())
 		return models.StreamError{ErrMsg: stream.Err().Error()}
 	}
 

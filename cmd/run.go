@@ -11,6 +11,7 @@ import (
 
 	"github.com/gregriff/ducky/models"
 	"github.com/gregriff/ducky/models/anthropic"
+	"github.com/gregriff/ducky/models/openai"
 	"github.com/gregriff/ducky/tui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -29,11 +30,29 @@ var runCmd = &cobra.Command{
 		if len(args) > 0 {
 			viper.Set("model", args[0])
 		}
-		model := viper.GetString("model")
-		if model == "" {
+		modelName := viper.GetString("model")
+		if modelName == "" {
 			return fmt.Errorf("model must be specified via argument, flag, or config file")
 		}
-		return anthropic.ValidateModelName(model)
+		anthropicErr := anthropic.ValidateModelName(modelName)
+		openAIErr := openai.ValidateModelName(modelName)
+		if anthropicErr == nil || openAIErr == nil {
+			return nil
+		}
+
+		// Neither model is valid, handle errors
+		switch {
+		case anthropicErr != nil && openAIErr != nil:
+			// Model is neither openai nor anthropic, combine error messages
+			return fmt.Errorf("Invalid model name: %s\n%v\n%v", modelName, anthropicErr, openAIErr)
+		case anthropicErr != nil:
+			return fmt.Errorf("Invalid model name: %s\n%v", modelName, anthropicErr)
+		case openAIErr != nil:
+			return fmt.Errorf("Invalid model name: %s\n%v", modelName, openAIErr)
+		default:
+			// This shouldn't happen if validation functions are implemented correctly
+			return fmt.Errorf("Invalid model name: %s", modelName)
+		}
 	},
 	Run: runTUI,
 }
@@ -83,6 +102,7 @@ func runTUI(cmd *cobra.Command, args []string) {
 
 	// if stdin is a pipe
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		// TODO: replace this with direct calls to anthropic,openai model constructors
 		model := tui.InitLLMClient(modelName, systemPrompt, maxTokens)
 		responseChan := make(chan models.StreamChunk)
 		input, err := io.ReadAll(os.Stdin)

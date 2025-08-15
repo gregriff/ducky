@@ -48,16 +48,7 @@ func ValidateModelName(modelName string) error {
 		for name := range AnthropicModelConfigurations {
 			validNames = append(validNames, name)
 		}
-		return fmt.Errorf("invalid model name '%s'. Valid options: %s", modelName, strings.Join(validNames, ", "))
+		return fmt.Errorf("Valid Anthropic models: %s", strings.Join(validNames, ", "))
 	}
 	return nil
-}
-
-// GetValidModelNames returns the keys of AnthropicModelConfigurations, our supported Anthropic models
-func GetValidModelNames() []string {
-	var names []string
-	for name := range AnthropicModelConfigurations {
-		names = append(names, name)
-	}
-	return names
 }

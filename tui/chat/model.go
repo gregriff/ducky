@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"log"
 
 	"github.com/charmbracelet/lipgloss/v2"
 	styles "github.com/gregriff/ducky/tui/styles"
@@ -157,8 +158,15 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int, rend
 
 	if renderLastResponse {
 		lastResponseIdx := max(startingIndex-1, 0)
-		lastResponse := c.history[lastResponseIdx].response
-		c.renderedHistory.Write(c.Markdown.Render(lastResponse, resWidth))
+		lastResponseEntry := c.history[lastResponseIdx]
+		c.renderedHistory.Write(c.Markdown.Render(lastResponseEntry.response, resWidth))
+		log.Println("rendering last response, error should show")
+		log.Println("cur res: ", string(lastResponseEntry.response))
+		log.Println("cur err: ", lastResponseEntry.error)
+		if len(lastResponseEntry.error) > 0 {
+			log.Println("error detected")
+			c.renderedHistory.Write(c.Markdown.Render([]byte(lastResponseEntry.error), resWidth))
+		}
 	}
 	return
 }

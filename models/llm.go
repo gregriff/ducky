@@ -54,10 +54,10 @@ type Message struct {
 	Content string
 }
 
-// Pricing defines costs per million input or output tokens
+// Pricing defines costs per input or output token. They should be defined as `(cost per million) / 1,000,000`
 type Pricing struct {
-	PromptCost   float64 // per million tokens
-	ResponseCost float64 // per million tokens
+	PromptCost   float64 // per token
+	ResponseCost float64 // per token
 }
 
 // BoolPtr is a helper to set optional boolean fields.

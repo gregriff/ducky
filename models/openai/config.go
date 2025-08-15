@@ -64,6 +64,7 @@ var OpenAIModelConfigurations = map[string]OpenAIModelConfig{
 			PromptCost:   .25 / 1_000_000,
 			ResponseCost: 2. / 1_000_000,
 		},
+		SupportsReasoning: models.BoolPtr(true),
 	},
 	"gpt-5-nano": {
 		Id: "gpt-5-nano",
@@ -71,6 +72,7 @@ var OpenAIModelConfigurations = map[string]OpenAIModelConfig{
 			PromptCost:   .05 / 1_000_000,
 			ResponseCost: .4 / 1_000_000,
 		},
+		SupportsReasoning: models.BoolPtr(true),
 	},
 }
 
@@ -81,17 +83,7 @@ func ValidateModelName(modelName string) error {
 		for name := range OpenAIModelConfigurations {
 			validNames = append(validNames, name)
 		}
-		err := fmt.Errorf("invalid model name '%s'. Valid options: %s", modelName, strings.Join(validNames, ", "))
-		return err
+		return fmt.Errorf("Valid OpenAI models: %s", strings.Join(validNames, ", "))
 	}
 	return nil
-}
-
-// GetValidModelNames returns the keys of OpenAIModelConfigs, our supported OpenAI models
-func GetValidModelNames() []string {
-	var names []string
-	for name := range OpenAIModelConfigurations {
-		names = append(names, name)
-	}
-	return names
 }
