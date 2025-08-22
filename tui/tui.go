@@ -300,7 +300,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case models.StreamError:
-		log.Println("Stream Error:", msg.ErrMsg)
 		errMsg := fmt.Sprintf("**Error:** %v", msg.ErrMsg)
 		m.chat.AccumulateStream(errMsg, false, true)
 		return m, m.waitForNextChunk // ensure last chunk is read and let chunk and complete messages handle state
@@ -492,7 +491,6 @@ func (m *TUIModel) headerView(width int) string {
 		m.forceHeaderRefresh = false
 	}
 
-	// log.Printf("%#v", m.model)
 	rightText := models.GetModelId(m.model)
 	titleTextWidth := lipgloss.Width(leftText) +
 		lipgloss.Width(rightText) +
@@ -518,14 +516,12 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel mode
 	// if t.model != nil {
 	// 	pastMessages = t.model.DoGetChatHistory()
 	// }
-	log.Println("initing modelname:", modelName)
 
 	anthropicErr := anthropic.ValidateModelName(modelName)
 	openAIErr := openai.ValidateModelName(modelName)
 	// if anthropicErr == nil || openAIErr == nil {
 	// 	newModel = nil
 	// }
-	log.Printf("antErr: %v, openAIerr: %v", anthropicErr, openAIErr)
 
 	// Neither model is valid, handle errors
 	switch {

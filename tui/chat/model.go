@@ -2,7 +2,6 @@ package tui
 
 import (
 	"bytes"
-	"log"
 
 	"github.com/charmbracelet/lipgloss/v2"
 	styles "github.com/gregriff/ducky/tui/styles"
@@ -16,7 +15,6 @@ type ChatModel struct {
 
 	renderedHistory      bytes.Buffer // stores accumulated chat history rendered in markdown and color for a specific width
 	Markdown             *MarkdownRenderer
-	currentWrapWidth     int // # of term columns the stored prompts are word-wrapped to fit into
 	numChatsRendered     int
 	renderedLastResponse bool
 }
@@ -77,18 +75,18 @@ func (c *ChatModel) AddPrompt(s string) {
 
 // AddResponse updates the latest ChatEntry with the data from ResponseStream. Must be called after AddPrompt
 func (c *ChatModel) AddResponse() {
-	res := c.stream
+	stream := c.stream
 
 	curEntry := &c.history[len(c.history)-1]
-	curEntry.reasoning = res.reasoning.String()
+	curEntry.reasoning = stream.reasoning.String()
 
-	curEntry.response = make([]byte, res.response.Len())
-	copy(curEntry.response, res.response.Bytes())
-	curEntry.error = res.error
+	curEntry.response = make([]byte, stream.response.Len())
+	copy(curEntry.response, stream.response.Bytes())
+	curEntry.error = stream.error
 
-	res.reasoning.Reset()
-	res.response.Reset()
-	res.error = ""
+	stream.reasoning.Reset()
+	stream.response.Reset()
+	stream.error = ""
 }
 
 // Render returns a string of the entire chat history in markdown, wrapped to a certain width. If the vpWidth hasn't changed since the
@@ -101,10 +99,9 @@ func (c *ChatModel) Render(vpWidth int) (content string) {
 	responseWidth := int(float64(vpWidth) * styles.WIDTH_PROPORTION_RESPONSE)
 
 	// viewport width has changed. we must now re-render all prompts and responses so they wrap correctly
-	if vpWidth != c.currentWrapWidth {
+	if vpWidth != c.Markdown.CurrentWidth {
 		c.renderedHistory.Reset()
 		c.numChatsRendered = c.renderChatHistory(0, vpWidth, responseWidth, false)
-		c.currentWrapWidth = vpWidth
 	} else {
 		// when we have a new prompt or response, append to renderedHistory the latest rendered prompt/response
 		if c.numChatsRendered < max(numPrompts, numResponses) {
@@ -123,7 +120,7 @@ func (c *ChatModel) Render(vpWidth int) (content string) {
 
 		// reduce copying by building onto renderedHistory buffer then truncating it after we get the final result
 		baseLen := c.renderedHistory.Len()
-		c.renderedHistory.Write(c.renderCurrentResponse(responseWidth))
+		c.renderedHistory.Write(c.renderResponseStream(responseWidth))
 		content = c.renderedHistory.String()
 		c.renderedHistory.Truncate(baseLen)
 	} else {
@@ -133,8 +130,7 @@ func (c *ChatModel) Render(vpWidth int) (content string) {
 }
 
 // renderChatHistory iterates through the chat history starting at the given index and writes to .renderedHistory text to display
-// on screen. If the viewport width has changed since the last render, the prompt will be resized accordingly. It is assumed that the
-// .Markdown renderer has already been resized before this function is called.
+// on screen. If the viewport width has changed since the last render, the text will be resized accordingly by c.Markdown.Render
 func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int, renderLastResponse bool) (count int) {
 	maxPromptWidth := int(float64(vpWidth) * styles.WIDTH_PROPORTION_PROMPT)
 	marginText := lipgloss.NewStyle().Width(vpWidth - maxPromptWidth).Render("")
@@ -160,18 +156,14 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int, rend
 		lastResponseIdx := max(startingIndex-1, 0)
 		lastResponseEntry := c.history[lastResponseIdx]
 		c.renderedHistory.Write(c.Markdown.Render(lastResponseEntry.response, resWidth))
-		log.Println("rendering last response, error should show")
-		log.Println("cur res: ", string(lastResponseEntry.response))
-		log.Println("cur err: ", lastResponseEntry.error)
 		if len(lastResponseEntry.error) > 0 {
-			log.Println("error detected")
 			c.renderedHistory.Write(c.Markdown.Render([]byte(lastResponseEntry.error), resWidth))
 		}
 	}
 	return
 }
 
-func (c *ChatModel) renderCurrentResponse(width int) []byte {
+func (c *ChatModel) renderResponseStream(width int) []byte {
 	if c.stream.response.Len() > 0 {
 		return c.Markdown.Render(c.stream.response.Bytes(), width)
 	}

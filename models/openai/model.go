@@ -112,7 +112,6 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 	}
 
 	if stream.Err() != nil {
-		log.Println("OPENAI STREAMING ERROR: ", stream.Err().Error())
 		return models.StreamError{ErrMsg: stream.Err().Error()}
 	}
 
