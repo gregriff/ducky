@@ -150,8 +150,7 @@ func (llm *AnthropicModel) DoGetModelId() string {
 }
 
 func (llm *AnthropicModel) DoesSupportReasoning() bool {
-	thinking := llm.ModelConfig.Thinking
-	if thinking != nil && *thinking {
+	if thinking := llm.ModelConfig.Thinking; thinking != nil && *thinking {
 		return true
 	}
 	return false

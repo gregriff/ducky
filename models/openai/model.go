@@ -5,6 +5,7 @@ package openai
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/gregriff/ducky/models"
@@ -83,10 +84,6 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 		chunk := stream.Current()
 		// responses.ResponseOutputText  // a helper
 
-		// if len(chunk.Delta) > 0 {
-		// 	println(chunk.Choices[0].Delta.Content)
-		// }
-
 		switch eventVariant := chunk.AsAny().(type) {
 		case responses.ResponseCompletedEvent:
 			log.Println("response completed")
@@ -141,6 +138,8 @@ func buildMessages(history []models.Message, newContent string) responses.Respon
 			currentResponseInputParam = responses.ResponseInputItemUnionParam{OfMessage: &responses.EasyInputMessageParam{Content: currentMessageContentParam, Role: "user"}}
 		case "assistant":
 			currentResponseInputParam = responses.ResponseInputItemUnionParam{OfMessage: &responses.EasyInputMessageParam{Content: currentMessageContentParam, Role: "assistant"}}
+		default:
+			panic(fmt.Sprintf("Add support for this type of message:%s", msg.Role))
 		}
 		messages = append(messages, currentResponseInputParam)
 	}
@@ -171,8 +170,7 @@ func (llm *OpenAIModel) DoGetModelId() string {
 }
 
 func (llm *OpenAIModel) DoesSupportReasoning() bool {
-	thinking := llm.ModelConfig.SupportsReasoning
-	if thinking != nil && *thinking {
+	if reasoning := llm.ModelConfig.SupportsReasoning; reasoning != nil && *reasoning {
 		return true
 	}
 	return false
