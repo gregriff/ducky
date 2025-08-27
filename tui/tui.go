@@ -16,6 +16,7 @@ import (
 	"github.com/gregriff/ducky/models/openai"
 	chat "github.com/gregriff/ducky/tui/chat"
 	styles "github.com/gregriff/ducky/tui/styles"
+	"github.com/gregriff/ducky/utils"
 	zone "github.com/lrstanley/bubblezone/v2"
 )
 
@@ -25,6 +26,7 @@ type TUIModel struct {
 	systemPrompt    string
 	maxTokens       int
 	enableReasoning bool
+	reasoningEffort *uint8
 
 	// UI state
 	ready      bool
@@ -51,7 +53,7 @@ type TUIModel struct {
 // Bubbletea messages
 type streamComplete struct{}
 
-func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUIModel {
+func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoningEffort *uint8, maxTokens int, glamourStyle string) *TUIModel {
 	// create and style textarea
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
@@ -183,7 +185,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		content, _ := clipboard.ReadAll()
 		newlines := strings.Count(content, "\n")
 		if newlines > m.textarea.Height() {
-			newHeight := clamp(newlines, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
+			newHeight := utils.Clamp(newlines, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
 			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
 			viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
 
@@ -430,7 +432,7 @@ func (m *TUIModel) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
 
 	beginStreaming := func() tea.Msg {
-		return models.StreamPromptCompletion(m.model, prompt, m.enableReasoning, m.responseChan)
+		return models.StreamPromptCompletion(m.model, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
 	}
 
 	return m, tea.Batch(
@@ -533,12 +535,4 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel mode
 		os.Exit(1)
 	}
 	return newModel
-}
-
-// clamp is a copy/pasted func from bubbles/textarea, in order to replicate its internal behavior
-func clamp(v, low, high int) int {
-	if high < low {
-		low, high = high, low
-	}
-	return min(high, max(low, v))
 }

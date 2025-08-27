@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gregriff/ducky/models"
+	"github.com/openai/openai-go/v2/shared"
 )
 
 type OpenAIModelConfig struct {
@@ -15,6 +16,21 @@ type OpenAIModelConfig struct {
 	SupportsTemperature *bool
 	SupportsReasoning   *bool
 }
+
+// ReasoningEffortMap maps uints to strings used for the reasoningEffort parameter.
+// Allows easier migration to new effort levels
+var ReasoningEffortMap = map[uint8]shared.ReasoningEffort{
+	1: shared.ReasoningEffortMinimal,
+	2: shared.ReasoningEffortLow,
+	3: shared.ReasoningEffortMedium,
+	4: shared.ReasoningEffortHigh,
+}
+
+// these must correspond to the map above
+const (
+	MinReasoningEffortInt uint8 = 1
+	MaxReasoningEffortInt uint8 = 4
+)
 
 // GetOpenAIModelConfigs returns a map of OpenAI model names to properties about those models
 var OpenAIModelConfigurations = map[string]OpenAIModelConfig{

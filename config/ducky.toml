@@ -4,7 +4,9 @@ reasoning = true
 max-tokens = 2048
 style = "tokyo-night"
 
-pager = false
-
+# Anthropic only
 anthropic-api-key = ""
+
+# OpenAI only
 openai-api-key = ""
+reasoning-effort = 4 # GPT-5 only

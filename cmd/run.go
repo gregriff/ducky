@@ -60,31 +60,45 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	rootCmd.PersistentFlags().StringP("system-prompt", "P", "", "system prompt that will influence model responses")
-	viper.BindPFlag("system-prompt", rootCmd.PersistentFlags().Lookup("system-prompt"))
-	viper.SetDefault("system-prompt", "You are a concise assistant to a software engineer")
+	var flagName string
 
-	rootCmd.PersistentFlags().BoolP("reasoning", "r", true, "enable reasoning/thinking for supported models")
-	viper.BindPFlag("reasoning", rootCmd.PersistentFlags().Lookup("reasoning"))
-	viper.SetDefault("reasoning", true)
+	flagName = "system-prompt"
+	rootCmd.PersistentFlags().StringP(flagName, "P", "", "system prompt that will influence model responses")
+	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	viper.SetDefault(flagName, "You are a concise assistant to a software engineer")
 
-	rootCmd.PersistentFlags().IntP("max-tokens", "t", 0, "output token budget for each response")
-	viper.BindPFlag("max-tokens", rootCmd.PersistentFlags().Lookup("max-tokens"))
-	viper.SetDefault("max-tokens", 2048)
+	flagName = "reasoning"
+	rootCmd.PersistentFlags().BoolP(flagName, "r", true, "enable reasoning/thinking for supported models")
+	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	viper.SetDefault(flagName, true)
 
-	rootCmd.PersistentFlags().StringP("style", "s", "", "glamour style used to render Markdown responses (default tokyo-night)")
-	viper.BindPFlag("style", rootCmd.PersistentFlags().Lookup("style"))
-	viper.SetDefault("style", "tokyo-night")
+	flagName = "reasoning-effort"
+	rootCmd.PersistentFlags().Uint8P(flagName, "e", 4, "reasoning effort to be used for specific OpenAI reasoning models (1-4) Reducing reasoning effort can result in faster responses and fewer tokens used on reasoning in a response.")
+	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	viper.SetDefault(flagName, 4)
 
-	rootCmd.PersistentFlags().String("anthropic-api-key", "", "allows access to Claude models")
-	viper.BindPFlag("anthropic-api-key", rootCmd.PersistentFlags().Lookup("anthropic-api-key"))
+	flagName = "max-tokens"
+	rootCmd.PersistentFlags().IntP(flagName, "t", 0, "output token budget for each response")
+	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	viper.SetDefault(flagName, 2048)
 
-	rootCmd.PersistentFlags().String("openai-api-key", "", "allows access to OpenAI models")
-	viper.BindPFlag("openai-api-key", rootCmd.PersistentFlags().Lookup("openai-api-key"))
+	flagName = "style"
+	rootCmd.PersistentFlags().StringP(flagName, "s", "", "glamour style used to render Markdown responses (default tokyo-night)")
+	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	viper.SetDefault(flagName, "tokyo-night")
+
+	flagName = "anthropic-api-key"
+	rootCmd.PersistentFlags().String(flagName, "", "allows access to Claude models")
+	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+
+	flagName = "openai-api-key"
+	rootCmd.PersistentFlags().String(flagName, "", "allows access to OpenAI models")
+	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 }
 
 func runTUI(cmd *cobra.Command, args []string) {
-	_, exists := os.LookupEnv("OPENAI_API_KEY") // TODO: check if this is the correct one
+	// note: x_API_KEY will override DUCKY_x_API_KEY here
+	_, exists := os.LookupEnv("OPENAI_API_KEY")
 	if !exists {
 		os.Setenv("OPENAI_API_KEY", viper.GetString("openai-api-key"))
 	}
@@ -93,12 +107,15 @@ func runTUI(cmd *cobra.Command, args []string) {
 		os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
 	}
 
-	systemPrompt, modelName, reasoning, maxTokens, style :=
+	systemPrompt, modelName, reasoning, effort, maxTokens, style :=
 		viper.GetString("system-prompt"),
 		viper.GetString("model"),
 		viper.GetBool("reasoning"),
+		viper.GetUint8("reasoning-effort"),
 		viper.GetInt("max-tokens"),
 		viper.GetString("style")
+
+	effortPtr := models.Uint8Ptr(effort)
 
 	// if stdin is a pipe
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
@@ -111,7 +128,12 @@ func runTUI(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 		prompt := strings.TrimSpace(string(input))
-		go model.DoStreamPromptCompletion(prompt, reasoning, responseChan)
+
+		var streamError error
+		streamFunc := func() {
+			streamError = model.DoStreamPromptCompletion(prompt, reasoning, effortPtr, responseChan)
+		}
+		go streamFunc()
 
 		var fullResponse strings.Builder
 		for chunk := range responseChan {
@@ -119,7 +141,11 @@ func runTUI(cmd *cobra.Command, args []string) {
 				fullResponse.WriteString(chunk.Content)
 			}
 		}
-		fmt.Print(fullResponse.String())
+		fmt.Println(fullResponse.String())
+
+		if streamError != nil {
+			fmt.Fprintln(os.Stderr, streamError.Error())
+		}
 		return
 	}
 
@@ -129,6 +155,7 @@ func runTUI(cmd *cobra.Command, args []string) {
 		systemPrompt,
 		modelName,
 		reasoning,
+		effortPtr,
 		maxTokens,
 		style,
 	)

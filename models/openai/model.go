@@ -6,9 +6,9 @@ package openai
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/gregriff/ducky/models"
+	"github.com/gregriff/ducky/utils"
 	openai "github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/packages/param"
 	"github.com/openai/openai-go/v2/responses"
@@ -46,7 +46,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 	}
 }
 
-func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning bool, responseChan chan models.StreamChunk) error {
+func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning bool, reasoningEffort *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
@@ -58,15 +58,33 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 
 	maxTokens = int64(llm.MaxTokens)
 	fullResponseText := ""
+
 	if reasoningSupported = llm.ModelConfig.SupportsReasoning; reasoningSupported != nil && *reasoningSupported && enableReasoning {
-		reasoning = openai.ReasoningParam{Effort: shared.ReasoningEffortMinimal} // can be minimal, low, medium, high
+		var (
+			effortNormalized int
+			effortParam      shared.ReasoningEffort
+		)
+
+		if reasoningEffort != nil {
+			effortNormalized = utils.Clamp(
+				int(*reasoningEffort),
+				int(MinReasoningEffortInt),
+				int(MaxReasoningEffortInt),
+			)
+			effortParam = ReasoningEffortMap[uint8(effortNormalized)]
+		} else {
+			// this should never run because viper sets a default effort flag
+			effortParam = shared.ReasoningEffortMinimal
+		}
+		reasoning = openai.ReasoningParam{Effort: effortParam} // can be minimal, low, medium, high
 		// if maxTokens <= 1024 {
 		// 	maxTokens = 2048
 		// } else {
 		// 	maxTokens *= 2
 		// }
 	}
-	log.Println("init stream")
+
+	// TODO: add reasoning summary support
 
 	// https://pkg.go.dev/github.com/openai/openai-go/v2/responses#ResponseNewParams
 	stream := llm.Client.Responses.NewStreaming(context.TODO(), responses.ResponseNewParams{

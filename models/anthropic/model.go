@@ -41,7 +41,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 	}
 }
 
-func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinking bool, responseChan chan models.StreamChunk) error {
+func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
