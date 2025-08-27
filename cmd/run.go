@@ -87,6 +87,11 @@ func init() {
 	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, "tokyo-night")
 
+	flagName = "force-interactive"
+	rootCmd.PersistentFlags().Bool(flagName, false, "If stdin is a pipe, setting this option loads the TUI instead of just printing to stdout")
+	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	viper.SetDefault(flagName, false)
+
 	flagName = "anthropic-api-key"
 	rootCmd.PersistentFlags().String(flagName, "", "allows access to Claude models")
 	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
@@ -114,14 +119,12 @@ func runTUI(cmd *cobra.Command, args []string) {
 		viper.GetUint8("reasoning-effort"),
 		viper.GetInt("max-tokens"),
 		viper.GetString("style")
-
 	effortPtr := models.Uint8Ptr(effort)
+
+	var initialPrompt string
 
 	// if stdin is a pipe
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		// TODO: replace this with direct calls to anthropic,openai model constructors
-		model := tui.InitLLMClient(modelName, systemPrompt, maxTokens)
-		responseChan := make(chan models.StreamChunk)
 		input, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			fmt.Println("error reading from stdin")
@@ -129,24 +132,33 @@ func runTUI(cmd *cobra.Command, args []string) {
 		}
 		prompt := strings.TrimSpace(string(input))
 
-		var streamError error
-		streamFunc := func() {
-			streamError = model.DoStreamPromptCompletion(prompt, reasoning, effortPtr, responseChan)
-		}
-		go streamFunc()
+		// if the user wants use the TUI but supply the prompt via a pipe, run app as normal
+		if viper.GetBool("force-interactive") {
+			initialPrompt = prompt
+		} else {
+			// TODO: replace this with direct calls to anthropic,openai model constructors
+			model := tui.InitLLMClient(modelName, systemPrompt, maxTokens)
+			responseChan := make(chan models.StreamChunk)
 
-		var fullResponse strings.Builder
-		for chunk := range responseChan {
-			if !chunk.Reasoning {
-				fullResponse.WriteString(chunk.Content)
+			var streamError error
+			streamFunc := func() {
+				streamError = model.DoStreamPromptCompletion(prompt, reasoning, effortPtr, responseChan)
 			}
-		}
-		fmt.Println(fullResponse.String())
+			go streamFunc()
 
-		if streamError != nil {
-			fmt.Fprintln(os.Stderr, streamError.Error())
+			var fullResponse strings.Builder
+			for chunk := range responseChan {
+				if !chunk.Reasoning {
+					fullResponse.WriteString(chunk.Content)
+				}
+			}
+			fmt.Println(fullResponse.String())
+
+			if streamError != nil {
+				fmt.Fprintln(os.Stderr, streamError.Error())
+			}
+			return
 		}
-		return
 	}
 
 	// Run TUI application
@@ -159,5 +171,5 @@ func runTUI(cmd *cobra.Command, args []string) {
 		maxTokens,
 		style,
 	)
-	tui.Start()
+	tui.Start(initialPrompt)
 }
