@@ -12,7 +12,7 @@ Ducky provides the most ergonomic LLM chat interface for developers. With a mini
 
 ### Usage
 `ducky run [model name]`
-> Currently only Anthropic models are supported. OpenAI coming soon
+> All latest OpenAI and Anthropic models are supported, given an API Key
 
 > Run `ducky --help` to see all flags and options
 
