@@ -27,6 +27,7 @@ type TUIModel struct {
 	maxTokens       int
 	enableReasoning bool
 	reasoningEffort *uint8
+	initialPrompt   string
 
 	// UI state
 	ready      bool
@@ -51,6 +52,7 @@ type TUIModel struct {
 }
 
 // Bubbletea messages
+type makeInitialPrompt struct{}
 type streamComplete struct{}
 
 func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoningEffort *uint8, maxTokens int, glamourStyle string) *TUIModel {
@@ -85,12 +87,13 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoni
 	return t
 }
 
-func (m *TUIModel) Start() {
+func (m *TUIModel) Start(initialPrompt string) {
 	p := tea.NewProgram(m,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 		tea.WithReportFocus(),
 	)
+	m.initialPrompt = initialPrompt
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v", err)
 	}
@@ -98,7 +101,15 @@ func (m *TUIModel) Start() {
 
 // Init performs initial IO.
 func (m *TUIModel) Init() tea.Cmd {
-	return tea.Batch(tea.SetWindowTitle("ducky"), m.textarea.Focus())
+	var cmds []tea.Cmd
+	cmds = append(cmds, tea.SetWindowTitle("ducky"), m.textarea.Focus())
+
+	if len(m.initialPrompt) > 0 {
+		cmds = append(cmds, func() tea.Msg {
+			return makeInitialPrompt{}
+		})
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -263,6 +274,9 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// NOTE: on tmux, regaining focus from switching panes results in `tea.unknownCSISequenceMsg{0x1b, 0x5b, 0x49}`, so this is not run
 	case tea.FocusMsg:
 		return m, m.textarea.Focus()
+
+	case makeInitialPrompt:
+		return m.promptLLM(m.initialPrompt)
 
 	case models.StreamChunk:
 		m.isReasoning = msg.Reasoning
