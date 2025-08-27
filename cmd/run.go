@@ -73,7 +73,7 @@ func init() {
 	viper.SetDefault(flagName, true)
 
 	flagName = "reasoning-effort"
-	rootCmd.PersistentFlags().Uint8P(flagName, "e", 4, "reasoning effort to be used for specific OpenAI reasoning models (1-4) Reducing reasoning effort can result in faster responses and fewer tokens used on reasoning in a response.")
+	rootCmd.PersistentFlags().Uint8P(flagName, "e", 4, "reasoning effort to be used for specific OpenAI reasoning models. (1-4)")
 	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, 4)
 
@@ -88,7 +88,7 @@ func init() {
 	viper.SetDefault(flagName, "tokyo-night")
 
 	flagName = "force-interactive"
-	rootCmd.PersistentFlags().Bool(flagName, false, "If stdin is a pipe, setting this option loads the TUI instead of just printing to stdout")
+	rootCmd.PersistentFlags().Bool(flagName, false, "if stdin is a pipe, setting this option loads the TUI instead of just printing to stdout")
 	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, false)
 
