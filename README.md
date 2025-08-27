@@ -5,8 +5,10 @@
 Ducky provides the most ergonomic LLM chat interface for developers. With a minimal UX inspired by text messaging apps, ducky lets you access most powerful LLMs from within the terminal.
 
 ### Installation
-1. Install Go
+1. Install [Go](https://go.dev/doc/install)
 2. `go install github.com/gregriff/ducky@latest`
+> Note: if you've already installed it and want to update to the latest version, use
+> `GOPROXY=direct go install github.com/gregriff/ducky@latest`
 
 ### Usage
 `ducky run [model name]`
@@ -20,9 +22,8 @@ Edit the `$XDG_CONFIG_HOME/ducky/ducky.toml` that was created for you.
 ### Features
 - Markdown rendering of responses (can customize colors and more)
 - Syntax highlighting of code blocks (configurable, and per-language highlighting coming soon)
-- Double-click a response to open the `less` pager for easier copying and incremental text search
 - Responsive resizing of all elements on screen during terminal window resizing, even during response streaming
-- Intelligent resizing of prompt text input to maximize main content area
+- Intelligent resizing of prompt input to maximize main content area
 - Graceful handling of API errors
 
 ### Q&A
@@ -34,9 +35,6 @@ Edit the `$XDG_CONFIG_HOME/ducky/ducky.toml` that was created for you.
 
 - *Why not use the IDE's LLM interface?*
 > I believe LLMs work best in a seperate window when writing software. This makes the programmer think more about their prompts and discourages vibe coding.
-
-- *Why include the `less` pager?*
-> I thought it may be useful to allow full-text search of the chat history. Instead of implementing this from scratch I decided to use a familiar tool that was made specifically for this use case.
 
 - *How to select text and copy to clipboard?*
 > tldr; For now, you are only able to select and copy text that is visible on screen, using either the terminal emulator or multiplexer's dedicated text-selection keybind.

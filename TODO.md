@@ -23,14 +23,13 @@
 - preallocate currentResponse builder using maxTokens * ANSI multiplier
 
 #### Model Support:
+- impl usage cost caluclation
 - fully impl ability to switch models mid-session with a command, keeping history. use a selector bubble
 - use contexts with streaming to cancel after 10 secs of no API response, resetting this timer if a chunk is recieved
-- impl openAI models
 - modify system prompt for current chat in TUI (popup bubble)
 
 #### Configuration:
 - add color configs:
-  - pager prompt
   - UI elements
 
 #### Profiles:
@@ -40,24 +39,12 @@ Preset config options to use for the chat
 - profiles can change system messages of course
 > Examples: `cli profile create (or create-profile?)` `cli run --profile=` `cli profile edit (or edit-profile?)` `cli profile set-default (or set-default-profile?)`
 
-#### Pager
-##### General:
-- option to load pager into a file with only the current prompt/response, use the less commands :n,:p to navigate through responses:
-  - :n,:p would load pager at top of file (prompt)
-> this would make saving response context to Marks easier but not nessicary
-
-##### Marks:
-- figure out showing them in pager without truncated line symbol (add H_PADDING in View function instead of in RenderHistory so text is always less wide than text+Mark status bar width)
-- save them to DB
-
 
 #### Selection/Copying:
 ##### Problem:
 tmux offers the `copy-mode` command (`LEADER + [`), which takes control away from the application to allow selecting and copying. I could invoke this command instead of `less` on double-click, but copying more than what is currently on-screen would not be possible because tmux would scroll back in the history, above the application. This is also a problem with `less`, as terminal/tmux is still handling mouse events, so scrolling up while copying goes up in the terminal history as well.
 
-##### Solution 1:
-Use $EDITOR instead of pager and assume people know how to copy text in their editor and up to them to enable syntax highlighting for it
-##### Solution 2:
+##### Solution:
 manually impl text selection and copying:
 
 Vars:
@@ -76,11 +63,7 @@ Notes:
 - bubbletea v2 will add control for mouse cursor to make this look nicer
 - double click a code block to copy the entire block
 
-##### Solution 3:
-Do both, opening editor on doubleclick and dragging does native select
-
 #### DX:
-- bubbletea v2
 - add pre-commit hooks
   - secrets
   - formatter

@@ -7,6 +7,7 @@ type LLM interface {
 	DoStreamPromptCompletion(
 		prompt string,
 		enableReasoning bool, // whether the user wants the model to think/reason if supported
+		reasoningEffort *uint8, // only to be used for gpt-5 models
 		responseChan chan StreamChunk,
 	) error
 	DoGetCostOfCurrentChat() float64
@@ -16,8 +17,8 @@ type LLM interface {
 	DoesSupportReasoning() bool
 }
 
-func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, responseChan chan StreamChunk) error {
-	return llm.DoStreamPromptCompletion(prompt, enableReasoning, responseChan)
+func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, reasoningEffort *uint8, responseChan chan StreamChunk) error {
+	return llm.DoStreamPromptCompletion(prompt, enableReasoning, reasoningEffort, responseChan)
 }
 
 func GetCostOfCurrentChat(llm LLM) float64 {
@@ -54,15 +55,20 @@ type Message struct {
 	Content string
 }
 
-// Pricing defines costs per million input or output tokens
+// Pricing defines costs per input or output token. They should be defined as `(cost per million) / 1,000,000`
 type Pricing struct {
-	PromptCost   float64 // per million tokens
-	ResponseCost float64 // per million tokens
+	PromptCost   float64 // per token
+	ResponseCost float64 // per token
 }
 
 // BoolPtr is a helper to set optional boolean fields.
 func BoolPtr(b bool) *bool {
 	return &b
+}
+
+// Uint8Ptr is a helper to set optional Uint8 fields.
+func Uint8Ptr(i uint8) *uint8 {
+	return &i
 }
 
 // Bubbletea messsages

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gregriff/ducky/models"
+	"github.com/openai/openai-go/v2/shared"
 )
 
 type OpenAIModelConfig struct {
@@ -13,18 +14,33 @@ type OpenAIModelConfig struct {
 	// official ID from openai's API
 	Id                  string
 	SupportsTemperature *bool
-	Reasoning           *bool
+	SupportsReasoning   *bool
 }
 
+// ReasoningEffortMap maps uints to strings used for the reasoningEffort parameter.
+// Allows easier migration to new effort levels
+var ReasoningEffortMap = map[uint8]shared.ReasoningEffort{
+	1: shared.ReasoningEffortMinimal,
+	2: shared.ReasoningEffortLow,
+	3: shared.ReasoningEffortMedium,
+	4: shared.ReasoningEffortHigh,
+}
+
+// these must correspond to the map above
+const (
+	MinReasoningEffortInt uint8 = 1
+	MaxReasoningEffortInt uint8 = 4
+)
+
 // GetOpenAIModelConfigs returns a map of OpenAI model names to properties about those models
-var OpenAIModelConfigs = map[string]OpenAIModelConfig{
+var OpenAIModelConfigurations = map[string]OpenAIModelConfig{
 	"o3": {
 		Id: "o3",
 		Pricing: models.Pricing{
 			PromptCost:   10. / 1_000_000,
 			ResponseCost: 40. / 1_000_000,
 		},
-		Reasoning:           models.BoolPtr(true),
+		SupportsReasoning:   models.BoolPtr(true),
 		SupportsTemperature: models.BoolPtr(false),
 	},
 	"o4-mini": {
@@ -33,64 +49,57 @@ var OpenAIModelConfigs = map[string]OpenAIModelConfig{
 			PromptCost:   1.1 / 1_000_000,
 			ResponseCost: 4.4 / 1_000_000,
 		},
-		Reasoning:           models.BoolPtr(true),
+		SupportsReasoning:   models.BoolPtr(true),
 		SupportsTemperature: models.BoolPtr(false),
 	},
-	"4o-mini": {
+	"gpt-4o-mini": {
 		Id: "gpt-4o-mini",
 		Pricing: models.Pricing{
 			PromptCost:   .15 / 1_000_000,
 			ResponseCost: .075 / 1_000_000,
 		},
 	},
-	"4o": {
+	"gpt-4o": {
 		Id: "gpt-4o",
 		Pricing: models.Pricing{
 			PromptCost:   2.5 / 1_000_000,
 			ResponseCost: 10. / 1_000_000,
 		},
 	},
-	"4.1": {
-		Id: "gpt-4.1",
+	"gpt-5": {
+		Id: "gpt-5",
 		Pricing: models.Pricing{
-			PromptCost:   2. / 1_000_000,
-			ResponseCost: 8. / 1_000_000,
+			PromptCost:   1.25 / 1_000_000,
+			ResponseCost: 10. / 1_000_000,
 		},
+		SupportsReasoning: models.BoolPtr(true),
 	},
-	"4.1-mini": {
-		Id: "gpt-4.1-mini",
+	"gpt-5-mini": {
+		Id: "gpt-5-mini",
 		Pricing: models.Pricing{
-			PromptCost:   .4 / 1_000_000,
-			ResponseCost: 1.6 / 1_000_000,
+			PromptCost:   .25 / 1_000_000,
+			ResponseCost: 2. / 1_000_000,
 		},
+		SupportsReasoning: models.BoolPtr(true),
 	},
-	"4.1-nano": {
-		Id: "gpt-4.1-nano",
+	"gpt-5-nano": {
+		Id: "gpt-5-nano",
 		Pricing: models.Pricing{
-			PromptCost:   .1 / 1_000_000,
+			PromptCost:   .05 / 1_000_000,
 			ResponseCost: .4 / 1_000_000,
 		},
+		SupportsReasoning: models.BoolPtr(true),
 	},
 }
 
 // ValidateModelName validates that a modelName is one of our supported models. If so, it returns the modelId
 func ValidateModelName(modelName string) error {
-	if _, exists := OpenAIModelConfigs[modelName]; !exists {
+	if _, exists := OpenAIModelConfigurations[modelName]; !exists {
 		var validNames []string
-		for name := range OpenAIModelConfigs {
+		for name := range OpenAIModelConfigurations {
 			validNames = append(validNames, name)
 		}
-		err := fmt.Errorf("invalid model name '%s'. Valid options: %s", modelName, strings.Join(validNames, ", "))
-		return err
+		return fmt.Errorf("Valid OpenAI models: %s", strings.Join(validNames, ", "))
 	}
 	return nil
-}
-
-// GetValidModelNames returns the keys of OpenAIModelConfigs, our supported OpenAI models
-func GetValidModelNames() []string {
-	var names []string
-	for name := range OpenAIModelConfigs {
-		names = append(names, name)
-	}
-	return names
 }

@@ -33,11 +33,12 @@ var AnthropicModelConfigurations = map[string]AnthropicModelConfig{
 		},
 	},
 	"opus": {
-		Id: "claude-opus-4-20250514",
+		Id: "claude-opus-4-1-20250805",
 		Pricing: models.Pricing{
 			PromptCost:   15. / 1_000_000,
 			ResponseCost: 75. / 1_000_000,
 		},
+		Thinking: models.BoolPtr(true),
 	},
 }
 
@@ -48,16 +49,7 @@ func ValidateModelName(modelName string) error {
 		for name := range AnthropicModelConfigurations {
 			validNames = append(validNames, name)
 		}
-		return fmt.Errorf("invalid model name '%s'. Valid options: %s", modelName, strings.Join(validNames, ", "))
+		return fmt.Errorf("Valid Anthropic models: %s", strings.Join(validNames, ", "))
 	}
 	return nil
-}
-
-// GetValidModelNames returns the keys of AnthropicModelConfigurations, our supported Anthropic models
-func GetValidModelNames() []string {
-	var names []string
-	for name := range AnthropicModelConfigurations {
-		names = append(names, name)
-	}
-	return names
 }

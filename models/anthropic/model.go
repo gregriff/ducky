@@ -41,7 +41,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 	}
 }
 
-func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinking bool, responseChan chan models.StreamChunk) error {
+func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
@@ -99,7 +99,6 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 	}
 
 	if stream.Err() != nil {
-		// responseChan <- models.StreamChunk{Reasoning: false, Content: fmt.Sprintf("\n\n[Error: %v]", stream.Err())}
 		return models.StreamError{ErrMsg: stream.Err().Error()}
 	}
 
@@ -151,8 +150,7 @@ func (llm *AnthropicModel) DoGetModelId() string {
 }
 
 func (llm *AnthropicModel) DoesSupportReasoning() bool {
-	thinking := llm.ModelConfig.Thinking
-	if thinking != nil && *thinking {
+	if thinking := llm.ModelConfig.Thinking; thinking != nil && *thinking {
 		return true
 	}
 	return false

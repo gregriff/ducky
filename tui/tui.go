@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -12,8 +13,10 @@ import (
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/gregriff/ducky/models"
 	"github.com/gregriff/ducky/models/anthropic"
+	"github.com/gregriff/ducky/models/openai"
 	chat "github.com/gregriff/ducky/tui/chat"
 	styles "github.com/gregriff/ducky/tui/styles"
+	"github.com/gregriff/ducky/utils"
 	zone "github.com/lrstanley/bubblezone/v2"
 )
 
@@ -23,6 +26,7 @@ type TUIModel struct {
 	systemPrompt    string
 	maxTokens       int
 	enableReasoning bool
+	reasoningEffort *uint8
 
 	// UI state
 	ready      bool
@@ -49,7 +53,7 @@ type TUIModel struct {
 // Bubbletea messages
 type streamComplete struct{}
 
-func NewTUI(systemPrompt string, modelName string, enableReasoning bool, maxTokens int, glamourStyle string) *TUIModel {
+func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoningEffort *uint8, maxTokens int, glamourStyle string) *TUIModel {
 	// create and style textarea
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
@@ -181,7 +185,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		content, _ := clipboard.ReadAll()
 		newlines := strings.Count(content, "\n")
 		if newlines > m.textarea.Height() {
-			newHeight := clamp(newlines, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
+			newHeight := utils.Clamp(newlines, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
 			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
 			viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
 
@@ -372,6 +376,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateComponents sends a Msg and []Cmd to the viewport and textarea to update their state and returns a Batch of all commands.
 // Use this in the Update function when both components need to be updated
 func (m *TUIModel) updateComponents(msg tea.Msg, cmds []tea.Cmd) (tea.Model, tea.Cmd) {
+	// TODO: can we just move this into the resizeComponents func?
 	var taCmd, vpCmd tea.Cmd
 	m.viewport, vpCmd = m.viewport.Update(msg)
 	m.textarea, taCmd = m.textarea.Update(msg)
@@ -427,7 +432,7 @@ func (m *TUIModel) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
 
 	beginStreaming := func() tea.Msg {
-		return models.StreamPromptCompletion(m.model, prompt, m.enableReasoning, m.responseChan)
+		return models.StreamPromptCompletion(m.model, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
 	}
 
 	return m, tea.Batch(
@@ -503,42 +508,31 @@ func (m *TUIModel) headerView(width int) string {
 
 // InitLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
 // in order to switch between LLMs while preserving message history
-func InitLLMClient(modelName, systemPrompt string, maxTokens int) models.LLM {
+func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel models.LLM) {
 	// var pastMessages []models.Message
 	// if t.model != nil {
-	// pastMessages = t.model.DoGetChatHistory()
+	// 	pastMessages = t.model.DoGetChatHistory()
 	// }
 
-	// Try each provider in order
-	// TODO: improve with the LLM interface.
-	// NOTE: newModelFunc will have different signature for openAI (topP etc). will need to use optional params maybe
-	providers := []struct {
-		validateFunc func(string) error
-		newModelFunc func(string, int, string, *[]models.Message) models.LLM
-	}{
-		{
-			anthropic.ValidateModelName,
-			func(sysPrompt string, maxTokens int, name string, msgs *[]models.Message) models.LLM {
-				return anthropic.NewModel(sysPrompt, maxTokens, name, msgs)
-			},
-		},
-		// {openai.ValidateModelName, openai.NewOpenAIModel},
-	}
+	anthropicErr := anthropic.ValidateModelName(modelName)
+	openAIErr := openai.ValidateModelName(modelName)
 
-	for _, provider := range providers {
-		if err := provider.validateFunc(modelName); err == nil {
-			// does not return an error, should it? Also, any cleanup we need to do?
-			return provider.newModelFunc(systemPrompt, maxTokens, modelName, nil)
-		}
+	// Neither model is valid, handle errors
+	switch {
+	case anthropicErr != nil && openAIErr != nil:
+		newModel = nil
+	case anthropicErr != nil && openAIErr == nil:
+		newModel = openai.NewModel(systemPrompt, maxTokens, modelName, nil)
+	case openAIErr != nil && anthropicErr == nil:
+		newModel = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil)
+	default:
+		// This shouldn't happen if validation functions are implemented correctly
+		// log.Printf("invalid logic, antErr: %v, openAIerr: %v", anthropicErr, openAIErr)
+		newModel = nil
 	}
-	return nil
-	// return fmt.Errorf("unsupported model: %s", modelName)
-}
-
-// clamp is a copy/pasted func from bubbles/textarea, in order to replicate its internal behavior
-func clamp(v, low, high int) int {
-	if high < low {
-		low, high = high, low
+	if newModel == nil {
+		fmt.Println("Error initializing model. Probably a developer bug")
+		os.Exit(1)
 	}
-	return min(high, max(low, v))
+	return newModel
 }

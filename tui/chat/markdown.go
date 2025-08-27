@@ -11,9 +11,9 @@ import (
 // MarkdownRenderer wraps glamour.TermRenderer and handles Markdown rendering
 // as well as resizing the renderable area of the screen.
 type MarkdownRenderer struct {
-	renderer *glamour.TermRenderer
-	wrapper  wrap.Wrap
-	curWidth int
+	renderer     *glamour.TermRenderer
+	wrapper      wrap.Wrap
+	CurrentWidth int
 
 	style string
 }
@@ -21,8 +21,8 @@ type MarkdownRenderer struct {
 // NewMarkdownRenderer creates the struct but Markdown cannot be rendered until .SetWidth is called
 func NewMarkdownRenderer(glamourStyle string) *MarkdownRenderer {
 	md := MarkdownRenderer{
-		style:    glamourStyle,
-		curWidth: 80,
+		style:        glamourStyle,
+		CurrentWidth: 80,
 	}
 	md.createNewRenderer()
 	return &md
@@ -34,7 +34,7 @@ func (md *MarkdownRenderer) createNewRenderer() {
 		// glamour.WithAutoStyle(), // this results in a hanging func call because of an ENOTTY
 		glamour.WithStylePath(md.style),
 		glamour.WithEmoji(),
-		glamour.WithWordWrap(md.curWidth),
+		glamour.WithWordWrap(md.CurrentWidth),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating Markdown renderer: %v\n", err)
@@ -52,8 +52,8 @@ func (md *MarkdownRenderer) SetStyle(newStyle string) {
 // Render safely renders Markdown for a given width
 func (md *MarkdownRenderer) Render(markdown []byte, width int) []byte {
 	// if the width has changed, recreate the renderer
-	if width != md.curWidth {
-		md.curWidth = width
+	if width != md.CurrentWidth {
+		md.CurrentWidth = width
 		md.createNewRenderer()
 	}
 
