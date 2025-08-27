@@ -1,5 +1,5 @@
 Binaries for programs and plugins
-gpt-cli-go
+ducky
 *.exe
 *.exe~
 *.dll

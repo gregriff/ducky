@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -170,8 +169,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if input == "" {
 				return m, nil
 			}
-
-			log.Println("about to call promptLLM")
 
 			// Start LLM streaming
 			return m.promptLLM(input)
@@ -432,8 +429,6 @@ func (m *TUIModel) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.viewport.GotoBottom()
 	m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
 
-	log.Println("about to prompt with: ", prompt)
-
 	beginStreaming := func() tea.Msg {
 		return models.StreamPromptCompletion(m.model, prompt, m.enableReasoning, m.responseChan)
 	}
@@ -519,9 +514,6 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel mode
 
 	anthropicErr := anthropic.ValidateModelName(modelName)
 	openAIErr := openai.ValidateModelName(modelName)
-	// if anthropicErr == nil || openAIErr == nil {
-	// 	newModel = nil
-	// }
 
 	// Neither model is valid, handle errors
 	switch {
@@ -533,7 +525,7 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel mode
 		newModel = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil)
 	default:
 		// This shouldn't happen if validation functions are implemented correctly
-		log.Printf("invalid logic, antErr: %v, openAIerr: %v", anthropicErr, openAIErr)
+		// log.Printf("invalid logic, antErr: %v, openAIerr: %v", anthropicErr, openAIErr)
 		newModel = nil
 	}
 	if newModel == nil {

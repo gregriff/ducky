@@ -85,24 +85,22 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 		// responses.ResponseOutputText  // a helper
 
 		switch eventVariant := chunk.AsAny().(type) {
-		case responses.ResponseCompletedEvent:
-			log.Println("response completed")
-		case responses.ResponseCreatedEvent:
-			log.Println("response created")
-		case responses.ResponseErrorEvent:
-			log.Println("response error")
-		case responses.ResponseFailedEvent:
-			log.Println("response failed")
-		case responses.ResponseReasoningSummaryTextDoneEvent:
-			log.Println("response reasoning summary text done event: ")
-		case responses.ResponseReasoningTextDoneEvent:
-			log.Println("response reasoning text done event: ")
+		// case responses.ResponseCompletedEvent:
+		// 	log.Println("response completed")
+		// case responses.ResponseCreatedEvent:
+		// 	log.Println("response created")
+		// case responses.ResponseErrorEvent:
+		// 	log.Println("response error")
+		// case responses.ResponseFailedEvent:
+		// 	log.Println("response failed")
+		// case responses.ResponseReasoningSummaryTextDoneEvent:
+		// 	log.Println("response reasoning summary text done event: ")
+		// case responses.ResponseReasoningTextDoneEvent:
+		// 	log.Println("response reasoning text done event: ")
 		case responses.ResponseReasoningTextDeltaEvent:
-			log.Println("reasoning delta event: ", eventVariant.Delta)
 			fullResponseText += eventVariant.Delta
 			responseChan <- models.StreamChunk{Reasoning: true, Content: chunk.Delta}
 		case responses.ResponseTextDeltaEvent:
-			log.Println("response delta event: ", eventVariant.Delta)
 			fullResponseText += eventVariant.Delta
 			responseChan <- models.StreamChunk{Reasoning: false, Content: chunk.Delta}
 		}

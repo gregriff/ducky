@@ -38,6 +38,7 @@ var AnthropicModelConfigurations = map[string]AnthropicModelConfig{
 			PromptCost:   15. / 1_000_000,
 			ResponseCost: 75. / 1_000_000,
 		},
+		Thinking: models.BoolPtr(true),
 	},
 }
 
