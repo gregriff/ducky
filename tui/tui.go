@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -49,6 +50,10 @@ type TUIModel struct {
 	headerBuilder strings.Builder
 	lastWidth          int
 	forceHeaderRefresh bool
+
+	// prompt history textarea scroller
+	numPrompts,
+	curPromptIndex int
 }
 
 // Bubbletea messages
@@ -145,6 +150,30 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// 		if numLines > normal, set height to min(numLines, maxHeight)
 				// 		else set height to normal
 			}
+		case "up", "down":
+			li := m.textarea.LineInfo()
+			// log.Printf("%#v", li)
+
+			// if user is not at the last column of the last line in the textarea,
+			// let normal cursor actions take place
+			if li.RowOffset != li.Height-1 || li.ColumnOffset != li.Width-1 {
+				break
+			}
+
+			log.Println("USER IS AT LAST POS OF LAST LINE")
+
+			m.numPrompts = m.chat.HistoryLen()
+			if m.numPrompts == 0 {
+				return m, nil
+			}
+
+			// TODO: prob going to need a stack.
+			// when the user goes up in history, then edits the text area, contents should be pushed onto the stack,
+			// so that when they press up again, they see the last prompt, instead of the one above the one they selected and edited
+
+			// if keyString == "up" {
+
+			// }
 		}
 
 		// TODO: impl cancel response WITH CONTEXTS
