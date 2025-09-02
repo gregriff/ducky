@@ -2,7 +2,6 @@ package tui
 
 import (
 	"bytes"
-	"errors"
 
 	"github.com/charmbracelet/lipgloss/v2"
 	styles "github.com/gregriff/ducky/tui/styles"
@@ -10,9 +9,10 @@ import (
 
 // ChatModel stores the state of the current chat with the LLM and formats prompts/responses
 type ChatModel struct {
-	history   []ChatEntry
-	stream    *ResponseStream
-	TotalCost float64
+	history    []ChatEntry
+	stream     *ResponseStream
+	scrollBack Buffer
+	TotalCost  float64
 
 	renderedHistory      bytes.Buffer // stores accumulated chat history rendered in markdown and color for a specific width
 	Markdown             *MarkdownRenderer
@@ -33,9 +33,13 @@ func (s *ResponseStream) Len() int {
 }
 
 func NewChatModel(glamourStyle string) *ChatModel {
+	history := make([]ChatEntry, 0, 10)
 	return &ChatModel{
-		stream:   &ResponseStream{},
-		history:  make([]ChatEntry, 0, 10),
+		stream:  &ResponseStream{},
+		history: history,
+		scrollBack: Buffer{
+			history: &history,
+		},
 		Markdown: NewMarkdownRenderer(glamourStyle),
 	}
 }
@@ -183,13 +187,4 @@ func (c *ChatModel) Clear() {
 
 func (c *ChatModel) HistoryLen() int {
 	return len(c.history)
-}
-
-// GetPrompt returns the prompt at the given index
-func (c *ChatModel) GetPrompt(idx int) (string, error) {
-	historyLen := c.HistoryLen()
-	if 0 > idx || idx > historyLen {
-		return "", errors.New("Invalid index")
-	}
-	return c.history[idx].prompt, nil
 }

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -159,17 +158,25 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if li.RowOffset != li.Height-1 || li.ColumnOffset != li.Width-1 {
 				break
 			}
+			cursorOnFirstRow := li.RowOffset == 0
+			cursorOnLastRow := li.RowOffset == li.Height-1
+			// if cursorOnFirstRow {
+			// 	break // do
+			// } else if cursorOnLastRow {
+			// 	break // do
+			// } else { // cursor is somewhere in the middle of the text (row-wise)
+			// 	break
+			// }
 
-			log.Println("USER IS AT LAST POS OF LAST LINE")
+			// cursor is somewhere in the middle of the text (row-wise)
+			if !cursorOnFirstRow && !cursorOnLastRow {
+				break
+			}
 
 			m.numPrompts = m.chat.HistoryLen()
 			if m.numPrompts == 0 {
 				return m, nil
 			}
-
-			// TODO: prob going to need a stack.
-			// when the user goes up in history, then edits the text area, contents should be pushed onto the stack,
-			// so that when they press up again, they see the last prompt, instead of the one above the one they selected and edited
 
 			// if keyString == "up" {
 
