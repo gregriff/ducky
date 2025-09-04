@@ -49,10 +49,6 @@ type TUIModel struct {
 	headerBuilder strings.Builder
 	lastWidth          int
 	forceHeaderRefresh bool
-
-	// prompt history textarea scroller
-	numPrompts,
-	curPromptIndex int
 }
 
 // Bubbletea messages
@@ -150,37 +146,43 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// 		else set height to normal
 			}
 		case "up", "down":
-			li := m.textarea.LineInfo()
-			// log.Printf("%#v", li)
+			lineCount := m.textarea.LineCount()
+			lineNo := m.textarea.Line()
+			cursorOnFirstRow := lineNo == 0
+			cursorOnLastRow := lineNo == lineCount
 
-			// if user is not at the last column of the last line in the textarea,
-			// let normal cursor actions take place
-			if li.RowOffset != li.Height-1 || li.ColumnOffset != li.Width-1 {
+			// determine if we should let normal up/down cursor actions take place
+			if cursorOnFirstRow && !cursorOnLastRow && lineCount > 1 && keyString == "down" {
 				break
 			}
-			cursorOnFirstRow := li.RowOffset == 0
-			cursorOnLastRow := li.RowOffset == li.Height-1
-			// if cursorOnFirstRow {
-			// 	break // do
-			// } else if cursorOnLastRow {
-			// 	break // do
-			// } else { // cursor is somewhere in the middle of the text (row-wise)
-			// 	break
-			// }
-
-			// cursor is somewhere in the middle of the text (row-wise)
+			if cursorOnLastRow && !cursorOnFirstRow && lineCount > 1 && keyString == "up" {
+				break
+				// TODO: color the prompt lead differently on its first line?
+			}
 			if !cursorOnFirstRow && !cursorOnLastRow {
+				// if cursor is somewhere in the middle of the text
 				break
 			}
 
-			m.numPrompts = m.chat.HistoryLen()
-			if m.numPrompts == 0 {
+			var (
+				retrievedPrompt string
+				exists          bool
+			)
+			curPrompt := strings.TrimSpace(m.textarea.Value())
+			if keyString == "up" {
+				retrievedPrompt, exists = m.chat.Scrollback.PrevPrompt(curPrompt)
+			} else {
+				retrievedPrompt, exists = m.chat.Scrollback.NextPrompt(curPrompt)
+				// TODO: set line number to 0 for better traversal
+			}
+
+			if !exists {
 				return m, nil
 			}
 
-			// if keyString == "up" {
-
-			// }
+			m.textarea.SetValue(retrievedPrompt)
+			m.textarea, taCmd = m.textarea.Update(msg)
+			return m, taCmd
 		}
 
 		// TODO: impl cancel response WITH CONTEXTS
@@ -214,6 +216,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			input := strings.TrimSpace(m.textarea.Value())
 			m.textarea.Reset()
+			m.chat.Scrollback.Reset()
 
 			if input == "" {
 				return m, nil

@@ -11,7 +11,7 @@ import (
 type ChatModel struct {
 	history    []ChatEntry
 	stream     *ResponseStream
-	scrollBack Buffer
+	Scrollback *Traverser
 	TotalCost  float64
 
 	renderedHistory      bytes.Buffer // stores accumulated chat history rendered in markdown and color for a specific width
@@ -33,15 +33,13 @@ func (s *ResponseStream) Len() int {
 }
 
 func NewChatModel(glamourStyle string) *ChatModel {
-	history := make([]ChatEntry, 0, 10)
-	return &ChatModel{
-		stream:  &ResponseStream{},
-		history: history,
-		scrollBack: Buffer{
-			history: &history,
-		},
+	model := ChatModel{
+		stream:   &ResponseStream{},
+		history:  make([]ChatEntry, 0, 10),
 		Markdown: NewMarkdownRenderer(glamourStyle),
 	}
+	model.Scrollback = NewTraverser(&model.history)
+	return &model
 }
 
 func (c *ChatModel) numPrompts() int {
