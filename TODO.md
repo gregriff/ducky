@@ -3,24 +3,23 @@
 
 #### Bugs:
 - scrolling of textarea not working, not increasing in size unless paste happens. this is a because the expansion is triggered due to counting newlines in the box, and if typing, or pasting text with no newlines, expansion wont happen
-- cursor is broken since migration to bubbletea V2
+- cursor is broken since migration to bubbletea V2 (tell it to blink, seperate from the focus cmd now)
 
 #### UI:
-- during streaming, only render current prompt and response for better UX. upon stream completion, render entire history and reposition where user was at the moment the stream completed. if a scrollup happens at vp.YOffset==0, render entire history, reposition to scroll pos
 - move horizontal padding out into the view functions. dont pad in md renderer. add left gutter for copy?
-- when textarea empty, keypad up/vim up cycles up in history. when at last char in textarea, keypad down/vim down cycles down in history if any
+- add popup command menu when holding ctrl
+- insert newline into textarea once V2 is used
+- add prompt editor (double clicking prompt), invoke $EDITOR on prompt buf. would be useful for adding code comment context after a paste
+- during streaming, only render current prompt and response for better UX. upon stream completion, render entire history and reposition where user was at the moment the stream completed. if a scrollup happens at vp.YOffset==0, render entire history, reposition to scroll pos
 - mark prompt lines in new selection gutter on the left side of screen
 - impl discoloring/stop blinking when focus is lost
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
-- add popup command menu when holding ctrl
 - add messages for history cleared etc.
-- insert newline into textarea once V2 is used
 - File uploads by drag/dropping into terminal
 
 #### Rendering:
 - Hyperlinks/citations, at least for claude models, as terminal hyperlinks: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
 - Fix Markdown H2s
-- preallocate currentResponse builder using maxTokens * ANSI multiplier
 
 #### Model Support:
 - impl usage cost caluclation

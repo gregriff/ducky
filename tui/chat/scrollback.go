@@ -34,6 +34,7 @@ func (t *Traverser) getPrompt(idx int) string {
 
 // NextPrompt should not be called if the prompt history is empty
 func (t *Traverser) NextPrompt(visibleText string) (prompt string, found bool) {
+	// log.Printf("\nNEXT CALLED: %d\n", t.currentIdx)
 	historyLen := len(*t.history)
 	if historyLen == 0 {
 		return "", false
@@ -56,6 +57,7 @@ func (t *Traverser) NextPrompt(visibleText string) (prompt string, found bool) {
 	if t.currentIdx == historyLen-1 {
 		// this means they're no longer cycling through the history, so denote that with -1
 		t.currentIdx = -1
+		// log.Printf("\n\nNEXT CALLED AND USER SHOULD SEE THEIR TAIL:\nuserInput: %s", t.userInput)
 		return t.userInput, true
 	}
 
@@ -71,6 +73,7 @@ func (t *Traverser) NextPrompt(visibleText string) (prompt string, found bool) {
 
 // PrevPrompt should not be called if the prompt history is empty
 func (t *Traverser) PrevPrompt(visibleText string) (prompt string, found bool) {
+	// log.Printf("\nPREV CALLED: %d\n", t.currentIdx)
 	historyLen := len(*t.history)
 	if historyLen == 0 {
 		return "", false
@@ -79,6 +82,7 @@ func (t *Traverser) PrevPrompt(visibleText string) (prompt string, found bool) {
 	if t.currentIdx == -1 {
 		t.userInput = visibleText // save user input to restore later
 		mostRecentPromptIdx := historyLen - 1
+		// log.Printf("\n\nUSER GOING BACK FROM TAIL. \nmostRecentPromptIdx: %d\nvisibleText: %s", mostRecentPromptIdx, visibleText)
 
 		var prompt string
 		if editedPrompt, exists := t.editedPrompts[mostRecentPromptIdx]; exists {

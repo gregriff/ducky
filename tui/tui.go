@@ -18,6 +18,7 @@ import (
 	styles "github.com/gregriff/ducky/tui/styles"
 	"github.com/gregriff/ducky/utils"
 	zone "github.com/lrstanley/bubblezone/v2"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 type TUIModel struct {
@@ -27,7 +28,7 @@ type TUIModel struct {
 	maxTokens       int
 	enableReasoning bool
 	reasoningEffort *uint8
-	initialPrompt   string
+	initialPrompt   string // if stdin is a pipe and --force-interactive is used
 
 	// UI state
 	ready      bool
@@ -146,21 +147,37 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// 		else set height to normal
 			}
 		case "up", "down":
-			lineCount := m.textarea.LineCount()
-			lineNo := m.textarea.Line()
-			cursorOnFirstRow := lineNo == 0
-			cursorOnLastRow := lineNo == lineCount
+			realLineCount := m.textarea.LineCount() // # of lines given infinite screen width
+			lineNo := m.textarea.Line() + 1         // starts at zero
 
-			// determine if we should let normal up/down cursor actions take place
-			if cursorOnFirstRow && !cursorOnLastRow && lineCount > 1 && keyString == "down" {
+			wrappedLineCount := m.getNumLines(m.textarea.Value()) // # of lines on screen incl. soft-wrapped
+
+			li := m.textarea.LineInfo()
+			cursorOnFirstRow := lineNo == 1
+			cursorOnLastRow := lineNo == realLineCount
+			// log.Printf("%#v", li)
+			// log.Println("wrappedLineCount: ", wrappedLineCount, "realLineCount", realLineCount, "height", m.textarea.Height(), "lineNo: ", lineNo, "cursorOnFirstRow: ", cursorOnFirstRow, "cursorOnLastRow: ", cursorOnLastRow)
+
+			// below are the conditions where we should let normal up/down cursor actions take place
+			if cursorOnFirstRow && !cursorOnLastRow && wrappedLineCount > 1 && keyString == "down" {
 				break
 			}
-			if cursorOnLastRow && !cursorOnFirstRow && lineCount > 1 && keyString == "up" {
+			if cursorOnLastRow && !cursorOnFirstRow && wrappedLineCount > 1 && keyString == "up" {
 				break
 				// TODO: color the prompt lead differently on its first line?
 			}
 			if !cursorOnFirstRow && !cursorOnLastRow {
 				// if cursor is somewhere in the middle of the text
+				break
+			}
+			// if the last line is soft-wrapped onto multiple terminal rows and
+			// the cursor is not at the last row of that line
+			if cursorOnFirstRow && li.Height > 1 && li.RowOffset > 0 {
+				break
+			}
+			// if the last line is soft-wrapped onto multiple terminal rows and
+			// the cursor is not at the last row of that line
+			if cursorOnLastRow && li.Height > 1 && li.RowOffset < li.Height-1 {
 				break
 			}
 
@@ -233,7 +250,9 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// here we grab the paste message before textarea gets it, in order to increase the height of the textarea if
 		// the pasted text has many lines
 		content, _ := clipboard.ReadAll()
-		newlines := strings.Count(content, "\n")
+		// oldNewlines := strings.Count(content, "\n")
+		newlines := m.getNumLines(content)
+		// log.Printf("OldCalc: %d\nNewCalc: %d", oldNewlines, newlines)
 		if newlines > m.textarea.Height() {
 			newHeight := utils.Clamp(newlines, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
 			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
@@ -264,7 +283,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break // could just return m, nil
 				}
 				// this allows the user to click the viewport and not have the textarea be unfocused if theres not a lot of text in it
-				if textareaFocused && m.textarea.LineCount() > styles.TEXTAREA_HEIGHT_COLLAPSED {
+				if textareaFocused && m.getNumLines(m.textarea.Value()) > styles.TEXTAREA_HEIGHT_COLLAPSED {
 					m.textarea.Blur() // TODO: need to collapse it as well
 				}
 
@@ -290,18 +309,21 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				triggerScroll, scrollKey = true, tea.KeyPressMsg{Code: tea.KeyDown}
 			}
 
-			if triggerScroll {
-				if m.textarea.Focused() {
-					if m.textarea.LineCount() <= m.textarea.Height() {
-						m.viewport, scrollCmd = m.viewport.Update(msg)
-					} else {
-						m.textarea, scrollCmd = m.textarea.Update(scrollKey)
-					}
-				} else {
-					m.viewport, scrollCmd = m.viewport.Update(msg)
-				}
-				return m, scrollCmd
+			if !triggerScroll {
+				break
 			}
+
+			if m.textarea.Focused() {
+				wrappedLineCount := m.getNumLines(m.textarea.Value())
+				if wrappedLineCount <= m.textarea.Height() {
+					m.viewport, scrollCmd = m.viewport.Update(msg)
+				} else {
+					m.textarea, scrollCmd = m.textarea.Update(scrollKey)
+				}
+			} else {
+				m.viewport, scrollCmd = m.viewport.Update(msg)
+			}
+			return m, scrollCmd
 		}
 
 	case tea.BlurMsg:
@@ -373,10 +395,12 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.MouseWheelDelta = 2
 			m.viewport.SetContent(m.chat.Render(windowWidth))
 			m.viewport.GotoBottom()
+			m.textarea.MaxWidth = textAreaWidth
 			m.textarea.SetWidth(textAreaWidth)
 			m.textarea.MaxHeight = viewportHeight / 2
 			m.ready = true
 		} else {
+			m.textarea.MaxHeight = viewportHeight / 2
 			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 		}
 		return m.updateComponents(msg, cmds)
@@ -389,6 +413,8 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.textarea.Length() > 0 {
 			if m.textarea.Height() < expanded {
 				newHeight = expanded
+			} else if numLines := m.getNumLines(m.textarea.Value()); numLines >= expanded {
+				newHeight = utils.Clamp(numLines, expanded, m.textarea.MaxHeight)
 			}
 		} else if m.textarea.Height() > collapsed {
 			newHeight = collapsed
@@ -442,11 +468,16 @@ func (m *TUIModel) redraw() tea.Msg {
 	return m.windowSize
 }
 
+// resizeComponents sets properties on the viewport and textarea to resize them on their next Update()
 func (m *TUIModel) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
 	m.viewport.SetWidth(windowWidth)
 	m.viewport.SetHeight(viewportHeight)
 
+	m.textarea.MaxWidth = textAreaWidth
 	m.textarea.SetWidth(textAreaWidth)
+	// wrappedPrompt := wordwrap.String(m.textarea.Value(), m.textarea.MaxWidth)
+	// m.textarea.SetValue(wrappedPrompt)
+
 	m.viewport.SetContent(m.chat.Render(windowWidth))
 }
 
@@ -465,6 +496,14 @@ func (m *TUIModel) getResizeParams(windowHeight, windowWidth int, taHeight *int)
 	viewportHeight = windowHeight - verticalMarginHeight
 	textAreaWidth = windowWidth - styles.H_PADDING
 	return viewportHeight, textAreaWidth
+}
+
+func (m *TUIModel) getNumLines(text string) int {
+	wrapped := wordwrap.String(text, m.textarea.MaxWidth)
+	lines := strings.Split(wrapped, "\n")
+	// log.Println("GETNUMLINES:")
+	// log.Printf("wrapped: %s\nlines: %s\nmaxWidth: %d\n%d lines\n", wrapped, lines, m.textarea.MaxWidth, len(lines))
+	return len(lines)
 }
 
 // promptLLM makes the LLM API request, handles TUI state and begins listening for the response stream
