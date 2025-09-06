@@ -9,9 +9,10 @@ import (
 
 // ChatModel stores the state of the current chat with the LLM and formats prompts/responses
 type ChatModel struct {
-	history   []ChatEntry
-	stream    *ResponseStream
-	TotalCost float64
+	history    []ChatEntry
+	stream     *ResponseStream
+	Scrollback *Traverser
+	TotalCost  float64
 
 	renderedHistory      bytes.Buffer // stores accumulated chat history rendered in markdown and color for a specific width
 	Markdown             *MarkdownRenderer
@@ -32,11 +33,13 @@ func (s *ResponseStream) Len() int {
 }
 
 func NewChatModel(glamourStyle string) *ChatModel {
-	return &ChatModel{
+	model := ChatModel{
 		stream:   &ResponseStream{},
 		history:  make([]ChatEntry, 0, 10),
 		Markdown: NewMarkdownRenderer(glamourStyle),
 	}
+	model.Scrollback = NewTraverser(&model.history)
+	return &model
 }
 
 func (c *ChatModel) numPrompts() int {
@@ -92,8 +95,8 @@ func (c *ChatModel) AddResponse() {
 // Render returns a string of the entire chat history in markdown, wrapped to a certain width. If the vpWidth hasn't changed since the
 // last call to this func, the pre-rendered chat history will be reused and the ResponseStream will be appended to it
 func (c *ChatModel) Render(vpWidth int) (content string) {
-	numPrompts, numResponses := c.numPrompts(), c.numResponses()
-	if numPrompts == 0 && numResponses == 0 {
+	numChatEntries := max(c.numPrompts(), c.numResponses())
+	if numChatEntries == 0 {
 		return ""
 	}
 	responseWidth := int(float64(vpWidth) * styles.WIDTH_PROPORTION_RESPONSE)
@@ -104,7 +107,7 @@ func (c *ChatModel) Render(vpWidth int) (content string) {
 		c.numChatsRendered = c.renderChatHistory(0, vpWidth, responseWidth, false)
 	} else {
 		// when we have a new prompt or response, append to renderedHistory the latest rendered prompt/response
-		if c.numChatsRendered < max(numPrompts, numResponses) {
+		if c.numChatsRendered < numChatEntries {
 			c.numChatsRendered = c.renderChatHistory(c.numChatsRendered, vpWidth, responseWidth, false)
 		} else {
 			if !c.renderedLastResponse {

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -18,6 +17,7 @@ import (
 	styles "github.com/gregriff/ducky/tui/styles"
 	"github.com/gregriff/ducky/utils"
 	zone "github.com/lrstanley/bubblezone/v2"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 type TUIModel struct {
@@ -27,7 +27,7 @@ type TUIModel struct {
 	maxTokens       int
 	enableReasoning bool
 	reasoningEffort *uint8
-	initialPrompt   string
+	initialPrompt   string // if stdin is a pipe and --force-interactive is used
 
 	// UI state
 	ready      bool
@@ -145,6 +145,58 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// 		if numLines > normal, set height to min(numLines, maxHeight)
 				// 		else set height to normal
 			}
+		case "up", "down":
+			realLineCount := m.textarea.LineCount() // # of lines given infinite screen width
+			lineNo := m.textarea.Line() + 1         // starts at zero
+
+			wrappedLineCount := m.getNumLines(m.textarea.Value()) // # of lines on screen incl. soft-wrapped
+
+			li := m.textarea.LineInfo()
+			cursorOnFirstRow := li.RowOffset == 0 // calculated according to soft-wrap
+			cursorOnLastRow := lineNo == realLineCount
+
+			// below are the conditions where we should let normal up/down cursor actions take place
+			if cursorOnFirstRow && !cursorOnLastRow && wrappedLineCount > 1 && keyString == "down" {
+				break
+			}
+			if cursorOnLastRow && !cursorOnFirstRow && wrappedLineCount > 1 && keyString == "up" {
+				break
+				// TODO: color the prompt lead differently on its first line?
+			}
+			if !cursorOnFirstRow && !cursorOnLastRow {
+				// if cursor is somewhere in the middle of the text
+				break
+			}
+			// if the last line is soft-wrapped onto multiple terminal rows and
+			// the cursor is not at the last row of that line
+			if cursorOnFirstRow && li.Height > 1 && li.RowOffset > 0 {
+				break
+			}
+			// if the last line is soft-wrapped onto multiple terminal rows and
+			// the cursor is not at the last row of that line
+			if cursorOnLastRow && li.Height > 1 && li.RowOffset < li.Height-1 {
+				break
+			}
+
+			var (
+				retrievedPrompt string
+				exists          bool
+			)
+			curPrompt := strings.TrimSpace(m.textarea.Value())
+			if keyString == "up" {
+				retrievedPrompt, exists = m.chat.Scrollback.PrevPrompt(curPrompt)
+			} else {
+				retrievedPrompt, exists = m.chat.Scrollback.NextPrompt(curPrompt)
+				// TODO: set line number to 0 for better traversal
+			}
+
+			if !exists {
+				return m, nil
+			}
+
+			m.textarea.SetValue(retrievedPrompt)
+			m.textarea, taCmd = m.textarea.Update(msg)
+			return m, taCmd
 		}
 
 		// TODO: impl cancel response WITH CONTEXTS
@@ -178,6 +230,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			input := strings.TrimSpace(m.textarea.Value())
 			m.textarea.Reset()
+			m.chat.Scrollback.Reset()
 
 			if input == "" {
 				return m, nil
@@ -194,9 +247,9 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// here we grab the paste message before textarea gets it, in order to increase the height of the textarea if
 		// the pasted text has many lines
 		content, _ := clipboard.ReadAll()
-		newlines := strings.Count(content, "\n")
-		if newlines > m.textarea.Height() {
-			newHeight := utils.Clamp(newlines, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
+		wrappedLineCount := m.getNumLines(content)
+		if wrappedLineCount > m.textarea.Height() {
+			newHeight := utils.Clamp(wrappedLineCount, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
 			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
 			viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
 
@@ -225,7 +278,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					break // could just return m, nil
 				}
 				// this allows the user to click the viewport and not have the textarea be unfocused if theres not a lot of text in it
-				if textareaFocused && m.textarea.LineCount() > styles.TEXTAREA_HEIGHT_COLLAPSED {
+				if textareaFocused && m.getNumLines(m.textarea.Value()) > styles.TEXTAREA_HEIGHT_COLLAPSED {
 					m.textarea.Blur() // TODO: need to collapse it as well
 				}
 
@@ -251,18 +304,22 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				triggerScroll, scrollKey = true, tea.KeyPressMsg{Code: tea.KeyDown}
 			}
 
-			if triggerScroll {
-				if m.textarea.Focused() {
-					if m.textarea.LineCount() <= m.textarea.Height() {
-						m.viewport, scrollCmd = m.viewport.Update(msg)
-					} else {
-						m.textarea, scrollCmd = m.textarea.Update(scrollKey)
-					}
-				} else {
-					m.viewport, scrollCmd = m.viewport.Update(msg)
-				}
-				return m, scrollCmd
+			// if the mousewheel button is not scroll up or scroll down
+			if !triggerScroll {
+				break
 			}
+
+			if m.textarea.Focused() {
+				wrappedLineCount := m.getNumLines(m.textarea.Value())
+				if wrappedLineCount < m.textarea.Height() {
+					m.viewport, scrollCmd = m.viewport.Update(msg)
+				} else {
+					m.textarea, scrollCmd = m.textarea.Update(scrollKey)
+				}
+			} else {
+				m.viewport, scrollCmd = m.viewport.Update(msg)
+			}
+			return m, scrollCmd
 		}
 
 	case tea.BlurMsg:
@@ -334,10 +391,12 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.MouseWheelDelta = 2
 			m.viewport.SetContent(m.chat.Render(windowWidth))
 			m.viewport.GotoBottom()
+			m.textarea.MaxWidth = textAreaWidth
 			m.textarea.SetWidth(textAreaWidth)
 			m.textarea.MaxHeight = viewportHeight / 2
 			m.ready = true
 		} else {
+			m.textarea.MaxHeight = viewportHeight / 2
 			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 		}
 		return m.updateComponents(msg, cmds)
@@ -350,6 +409,8 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.textarea.Length() > 0 {
 			if m.textarea.Height() < expanded {
 				newHeight = expanded
+			} else if numLines := m.getNumLines(m.textarea.Value()); numLines >= expanded {
+				newHeight = utils.Clamp(numLines, expanded, m.textarea.MaxHeight)
 			}
 		} else if m.textarea.Height() > collapsed {
 			newHeight = collapsed
@@ -403,11 +464,14 @@ func (m *TUIModel) redraw() tea.Msg {
 	return m.windowSize
 }
 
+// resizeComponents sets properties on the viewport and textarea to resize them on their next Update()
 func (m *TUIModel) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
 	m.viewport.SetWidth(windowWidth)
 	m.viewport.SetHeight(viewportHeight)
 
+	m.textarea.MaxWidth = textAreaWidth
 	m.textarea.SetWidth(textAreaWidth)
+
 	m.viewport.SetContent(m.chat.Render(windowWidth))
 }
 
@@ -426,6 +490,14 @@ func (m *TUIModel) getResizeParams(windowHeight, windowWidth int, taHeight *int)
 	viewportHeight = windowHeight - verticalMarginHeight
 	textAreaWidth = windowWidth - styles.H_PADDING
 	return viewportHeight, textAreaWidth
+}
+
+// getNumLines returns the number of lines the text in the textarea takes up (soft-wrapped).
+// takes into account lines of text not visible on screen (scrolled out of view)
+func (m *TUIModel) getNumLines(text string) int {
+	wrapped := wordwrap.String(text, m.textarea.MaxWidth)
+	lines := strings.Split(wrapped, "\n")
+	return len(lines)
 }
 
 // promptLLM makes the LLM API request, handles TUI state and begins listening for the response stream
@@ -531,7 +603,6 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel mode
 	anthropicErr := anthropic.ValidateModelName(modelName)
 	openAIErr := openai.ValidateModelName(modelName)
 
-	// Neither model is valid, handle errors
 	switch {
 	case anthropicErr != nil && openAIErr != nil:
 		newModel = nil
@@ -541,12 +612,10 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel mode
 		newModel = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil)
 	default:
 		// This shouldn't happen if validation functions are implemented correctly
-		// log.Printf("invalid logic, antErr: %v, openAIerr: %v", anthropicErr, openAIErr)
 		newModel = nil
 	}
 	if newModel == nil {
-		fmt.Println("Error initializing model. Probably a developer bug")
-		os.Exit(1)
+		panic(fmt.Sprintf("Error initializing model:\nantErr: %v\nopenAIerr: %v", anthropicErr, openAIErr))
 	}
 	return newModel
 }
