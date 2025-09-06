@@ -4,6 +4,8 @@
 #### Bugs:
 - scrolling of textarea not working, not increasing in size unless paste happens. this is a because the expansion is triggered due to counting newlines in the box, and if typing, or pasting text with no newlines, expansion wont happen
 - cursor is broken since migration to bubbletea V2 (tell it to blink, seperate from the focus cmd now)
+- cursor should be placed at end of line when placeholder shows up
+- textarea is not foused on startup on tmux
 
 #### UI:
 - move horizontal padding out into the view functions. dont pad in md renderer. add left gutter for copy?

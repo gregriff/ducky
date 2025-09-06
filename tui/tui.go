@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -153,10 +152,8 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			wrappedLineCount := m.getNumLines(m.textarea.Value()) // # of lines on screen incl. soft-wrapped
 
 			li := m.textarea.LineInfo()
-			cursorOnFirstRow := lineNo == 1
+			cursorOnFirstRow := li.RowOffset == 0 // calculated according to soft-wrap
 			cursorOnLastRow := lineNo == realLineCount
-			// log.Printf("%#v", li)
-			// log.Println("wrappedLineCount: ", wrappedLineCount, "realLineCount", realLineCount, "height", m.textarea.Height(), "lineNo: ", lineNo, "cursorOnFirstRow: ", cursorOnFirstRow, "cursorOnLastRow: ", cursorOnLastRow)
 
 			// below are the conditions where we should let normal up/down cursor actions take place
 			if cursorOnFirstRow && !cursorOnLastRow && wrappedLineCount > 1 && keyString == "down" {
@@ -250,11 +247,9 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// here we grab the paste message before textarea gets it, in order to increase the height of the textarea if
 		// the pasted text has many lines
 		content, _ := clipboard.ReadAll()
-		// oldNewlines := strings.Count(content, "\n")
-		newlines := m.getNumLines(content)
-		// log.Printf("OldCalc: %d\nNewCalc: %d", oldNewlines, newlines)
-		if newlines > m.textarea.Height() {
-			newHeight := utils.Clamp(newlines, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
+		wrappedLineCount := m.getNumLines(content)
+		if wrappedLineCount > m.textarea.Height() {
+			newHeight := utils.Clamp(wrappedLineCount, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
 			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
 			viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
 
@@ -309,13 +304,14 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				triggerScroll, scrollKey = true, tea.KeyPressMsg{Code: tea.KeyDown}
 			}
 
+			// if the mousewheel button is not scroll up or scroll down
 			if !triggerScroll {
 				break
 			}
 
 			if m.textarea.Focused() {
 				wrappedLineCount := m.getNumLines(m.textarea.Value())
-				if wrappedLineCount <= m.textarea.Height() {
+				if wrappedLineCount < m.textarea.Height() {
 					m.viewport, scrollCmd = m.viewport.Update(msg)
 				} else {
 					m.textarea, scrollCmd = m.textarea.Update(scrollKey)
@@ -475,8 +471,6 @@ func (m *TUIModel) resizeComponents(windowWidth, textAreaWidth, viewportHeight i
 
 	m.textarea.MaxWidth = textAreaWidth
 	m.textarea.SetWidth(textAreaWidth)
-	// wrappedPrompt := wordwrap.String(m.textarea.Value(), m.textarea.MaxWidth)
-	// m.textarea.SetValue(wrappedPrompt)
 
 	m.viewport.SetContent(m.chat.Render(windowWidth))
 }
@@ -498,11 +492,11 @@ func (m *TUIModel) getResizeParams(windowHeight, windowWidth int, taHeight *int)
 	return viewportHeight, textAreaWidth
 }
 
+// getNumLines returns the number of lines the text in the textarea takes up (soft-wrapped).
+// takes into account lines of text not visible on screen (scrolled out of view)
 func (m *TUIModel) getNumLines(text string) int {
 	wrapped := wordwrap.String(text, m.textarea.MaxWidth)
 	lines := strings.Split(wrapped, "\n")
-	// log.Println("GETNUMLINES:")
-	// log.Printf("wrapped: %s\nlines: %s\nmaxWidth: %d\n%d lines\n", wrapped, lines, m.textarea.MaxWidth, len(lines))
 	return len(lines)
 }
 
@@ -609,7 +603,6 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel mode
 	anthropicErr := anthropic.ValidateModelName(modelName)
 	openAIErr := openai.ValidateModelName(modelName)
 
-	// Neither model is valid, handle errors
 	switch {
 	case anthropicErr != nil && openAIErr != nil:
 		newModel = nil
@@ -619,12 +612,10 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel mode
 		newModel = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil)
 	default:
 		// This shouldn't happen if validation functions are implemented correctly
-		// log.Printf("invalid logic, antErr: %v, openAIerr: %v", anthropicErr, openAIErr)
 		newModel = nil
 	}
 	if newModel == nil {
-		fmt.Println("Error initializing model. Probably a developer bug")
-		os.Exit(1)
+		panic(fmt.Sprintf("Error initializing model:\nantErr: %v\nopenAIerr: %v", anthropicErr, openAIErr))
 	}
 	return newModel
 }
