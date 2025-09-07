@@ -10,7 +10,7 @@
 - add popup command menu when holding ctrl
 - insert newline into textarea once V2 is used
 - add prompt editor (double clicking prompt), invoke $EDITOR on prompt buf. would be useful for adding code comment context after a paste
-- during streaming, only render current prompt and response for better UX. upon stream completion, render entire history and reposition where user was at the moment the stream completed. if a scrollup happens at vp.YOffset==0, render entire history, reposition to scroll pos
+- scrollback should be able to use previous prompts after history is cleared. will need a seperate copy of the history for this, that is never reset.
 - mark prompt lines in new selection gutter on the left side of screen
 - impl discoloring/stop blinking when focus is lost
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt

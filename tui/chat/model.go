@@ -94,13 +94,20 @@ func (c *ChatModel) AddResponse() {
 
 // Render returns a string of the entire chat history in markdown, wrapped to a certain width. If the vpWidth hasn't changed since the
 // last call to this func, the pre-rendered chat history will be reused and the ResponseStream will be appended to it
-func (c *ChatModel) Render(vpWidth int) (content string) {
+func (c *ChatModel) Render(vpWidth int) string {
 	numChatEntries := max(c.numPrompts(), c.numResponses())
 	if numChatEntries == 0 {
 		return ""
 	}
 	responseWidth := int(float64(vpWidth) * styles.WIDTH_PROPORTION_RESPONSE)
 
+	// only render stream if streaming
+	if c.stream.Len() > 0 {
+		// c.renderedLastResponse = false
+		return string(c.renderResponseStream(responseWidth))
+	}
+
+	// else, render entire history
 	// viewport width has changed. we must now re-render all prompts and responses so they wrap correctly
 	if vpWidth != c.Markdown.CurrentWidth {
 		c.renderedHistory.Reset()
@@ -109,32 +116,34 @@ func (c *ChatModel) Render(vpWidth int) (content string) {
 		// when we have a new prompt or response, append to renderedHistory the latest rendered prompt/response
 		if c.numChatsRendered < numChatEntries {
 			c.numChatsRendered = c.renderChatHistory(c.numChatsRendered, vpWidth, responseWidth, false)
-		} else {
-			if !c.renderedLastResponse {
-				c.numChatsRendered = c.renderChatHistory(c.numChatsRendered, vpWidth, responseWidth, true)
-				c.renderedLastResponse = true
-			}
 		}
+		// else {
+		// log.Println("chats rendered is less than # of entries")
+		// if !c.renderedLastResponse {
+		// 	c.numChatsRendered = c.renderChatHistory(c.numChatsRendered, vpWidth, responseWidth, true)
+		// 	c.renderedLastResponse = true
+		// }
+		// }
 	}
 
 	// Render current response being streamed
-	if c.stream.Len() > 0 {
-		c.renderedLastResponse = false
+	// if isStreaming {
+	// 	c.renderedLastResponse = false
 
-		// reduce copying by building onto renderedHistory buffer then truncating it after we get the final result
-		baseLen := c.renderedHistory.Len()
-		c.renderedHistory.Write(c.renderResponseStream(responseWidth))
-		content = c.renderedHistory.String()
-		c.renderedHistory.Truncate(baseLen)
-	} else {
-		content = c.renderedHistory.String()
-	}
-	return
+	// 	// reduce copying by building onto renderedHistory buffer then truncating it after we get the final result
+	// 	baseLen := c.renderedHistory.Len()
+	// 	c.renderedHistory.Write(c.renderResponseStream(responseWidth))
+	// 	content = c.renderedHistory.String()
+	// 	c.renderedHistory.Truncate(baseLen)
+	// } else {
+	// 	content = c.renderedHistory.String()
+	// }
+	return c.renderedHistory.String()
 }
 
 // renderChatHistory iterates through the chat history starting at the given index and writes to .renderedHistory text to display
 // on screen. If the viewport width has changed since the last render, the text will be resized accordingly by c.Markdown.Render
-func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int, renderLastResponse bool) (count int) {
+func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int, _ bool) (count int) {
 	maxPromptWidth := int(float64(vpWidth) * styles.WIDTH_PROPORTION_PROMPT)
 	marginText := lipgloss.NewStyle().Width(vpWidth - maxPromptWidth).Render("")
 	promptStyle := lipgloss.NewStyle().Inherit(styles.ChatStyles.PromptText).Width(maxPromptWidth)
@@ -155,14 +164,14 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int, rend
 		}
 	}
 
-	if renderLastResponse {
-		lastResponseIdx := max(startingIndex-1, 0)
-		lastResponseEntry := c.history[lastResponseIdx]
-		c.renderedHistory.Write(c.Markdown.Render(lastResponseEntry.response, resWidth))
-		if len(lastResponseEntry.error) > 0 {
-			c.renderedHistory.Write(c.Markdown.Render([]byte(lastResponseEntry.error), resWidth))
-		}
-	}
+	// if renderLastResponse {
+	// 	lastResponseIdx := max(startingIndex-1, 0)
+	// 	lastResponseEntry := c.history[lastResponseIdx]
+	// 	c.renderedHistory.Write(c.Markdown.Render(lastResponseEntry.response, resWidth))
+	// 	if len(lastResponseEntry.error) > 0 {
+	// 		c.renderedHistory.Write(c.Markdown.Render([]byte(lastResponseEntry.error), resWidth))
+	// 	}
+	// }
 	return
 }
 
