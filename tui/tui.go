@@ -311,7 +311,8 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if m.textarea.Focused() {
 				wrappedLineCount := m.getNumLines(m.textarea.Value())
-				if wrappedLineCount < m.textarea.Height() {
+				taHeight := m.textarea.Height()
+				if wrappedLineCount < taHeight || taHeight == styles.TEXTAREA_HEIGHT_COLLAPSED {
 					m.viewport, scrollCmd = m.viewport.Update(msg)
 				} else {
 					m.textarea, scrollCmd = m.textarea.Update(scrollKey)
