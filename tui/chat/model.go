@@ -14,10 +14,9 @@ type ChatModel struct {
 	Scrollback *Traverser
 	TotalCost  float64
 
-	renderedHistory      bytes.Buffer // stores accumulated chat history rendered in markdown and color for a specific width
-	Markdown             *MarkdownRenderer
-	numChatsRendered     int
-	renderedLastResponse bool
+	renderedHistory  bytes.Buffer // stores accumulated chat history rendered in markdown and color for a specific width
+	Markdown         *MarkdownRenderer
+	numChatsRendered int
 }
 
 // ResponseStream is like a buffer for the text sent from an LLM API. Once a response ends this data is moved into a ChatEntry
@@ -103,7 +102,6 @@ func (c *ChatModel) Render(vpWidth int) string {
 
 	// only render stream if streaming
 	if c.stream.Len() > 0 {
-		// c.renderedLastResponse = false
 		return string(c.renderResponseStream(responseWidth))
 	}
 
@@ -117,27 +115,7 @@ func (c *ChatModel) Render(vpWidth int) string {
 		if c.numChatsRendered < numChatEntries {
 			c.numChatsRendered = c.renderChatHistory(c.numChatsRendered, vpWidth, responseWidth, false)
 		}
-		// else {
-		// log.Println("chats rendered is less than # of entries")
-		// if !c.renderedLastResponse {
-		// 	c.numChatsRendered = c.renderChatHistory(c.numChatsRendered, vpWidth, responseWidth, true)
-		// 	c.renderedLastResponse = true
-		// }
-		// }
 	}
-
-	// Render current response being streamed
-	// if isStreaming {
-	// 	c.renderedLastResponse = false
-
-	// 	// reduce copying by building onto renderedHistory buffer then truncating it after we get the final result
-	// 	baseLen := c.renderedHistory.Len()
-	// 	c.renderedHistory.Write(c.renderResponseStream(responseWidth))
-	// 	content = c.renderedHistory.String()
-	// 	c.renderedHistory.Truncate(baseLen)
-	// } else {
-	// 	content = c.renderedHistory.String()
-	// }
 	return c.renderedHistory.String()
 }
 
@@ -163,15 +141,6 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int, _ bo
 			c.renderedHistory.Write(c.Markdown.Render([]byte(error), resWidth))
 		}
 	}
-
-	// if renderLastResponse {
-	// 	lastResponseIdx := max(startingIndex-1, 0)
-	// 	lastResponseEntry := c.history[lastResponseIdx]
-	// 	c.renderedHistory.Write(c.Markdown.Render(lastResponseEntry.response, resWidth))
-	// 	if len(lastResponseEntry.error) > 0 {
-	// 		c.renderedHistory.Write(c.Markdown.Render([]byte(lastResponseEntry.error), resWidth))
-	// 	}
-	// }
 	return
 }
 
@@ -188,7 +157,6 @@ func (c *ChatModel) Clear() {
 	// TODO: save unsaved history in temporary sqlite DB or in-memory for accidental clears
 	c.history = c.history[:0]
 	c.numChatsRendered = 0
-	// c.renderedLastResponse = false
 	c.renderedHistory.Reset()
 }
 
