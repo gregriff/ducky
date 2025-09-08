@@ -1,8 +1,6 @@
 ## TODO List
-- profile renderCurrentResponse(), prealloc space for responses using maxTokens
 
 #### Bugs:
-- scrolling of textarea not working, not increasing in size unless paste happens. this is a because the expansion is triggered due to counting newlines in the box, and if typing, or pasting text with no newlines, expansion wont happen
 - cursor is broken since migration to bubbletea V2 (tell it to blink, seperate from the focus cmd now)
 - cursor should be placed at end of line when placeholder shows up
 - textarea is not foused on startup on tmux
@@ -12,7 +10,7 @@
 - add popup command menu when holding ctrl
 - insert newline into textarea once V2 is used
 - add prompt editor (double clicking prompt), invoke $EDITOR on prompt buf. would be useful for adding code comment context after a paste
-- during streaming, only render current prompt and response for better UX. upon stream completion, render entire history and reposition where user was at the moment the stream completed. if a scrollup happens at vp.YOffset==0, render entire history, reposition to scroll pos
+- scrollback should be able to use previous prompts after history is cleared. will need a seperate copy of the history for this, that is never reset.
 - mark prompt lines in new selection gutter on the left side of screen
 - impl discoloring/stop blinking when focus is lost
 - impl some consistent scrolling or positioning when user clicks enter to submit a prompt
@@ -65,6 +63,7 @@ Notes:
 - double click a code block to copy the entire block
 
 #### DX:
+- refactor subcomponents to adhere to the ELM framework
 - add pre-commit hooks
   - secrets
   - formatter
@@ -74,6 +73,7 @@ Notes:
 #### Random
 ###### Sliding-windowesque rendering of chat history:
 Only render last N prompts/responses depending on their length, because the user won't resonably scroll up to view those. would probably require bubblezone-like marking of the renderedHistory stringbuilder during writing it, with invisible ANSI codes. or could ditch the stringbuilder and lazy-render the markdown from the stored rawtext. This would be complicated so probably don't do this but it would reduce CPU usage during window resizing. prob not worth it
+- profile renderCurrentResponse(), prealloc space for responses using maxTokens
 
 #### Testing:
 - Ubuntu, fedora

@@ -222,6 +222,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.chat.Clear() // print something
 			m.model.DoClearChatHistory()
+			m.chat.Scrollback.Reset()
 			m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 			if !m.textarea.Focused() {
 				return m, m.textarea.Focus()
@@ -311,7 +312,8 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if m.textarea.Focused() {
 				wrappedLineCount := m.getNumLines(m.textarea.Value())
-				if wrappedLineCount < m.textarea.Height() {
+				taHeight := m.textarea.Height()
+				if wrappedLineCount < taHeight || taHeight == styles.TEXTAREA_HEIGHT_COLLAPSED {
 					m.viewport, scrollCmd = m.viewport.Update(msg)
 				} else {
 					m.textarea, scrollCmd = m.textarea.Update(scrollKey)
@@ -357,11 +359,20 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// TODO: use chroma lexer to apply correct syntax highlighting to full response
 		// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
 		m.chat.AddResponse()
+		curLineCount := m.viewport.TotalLineCount()
 
+		// prepends the chat history to the screen
 		m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 
 		if !m.preventScrollToBottom {
 			m.viewport.GotoBottom()
+		} else {
+			// user has scrolled up during streaming. since we are now prepending the entire chat history before the latest response,
+			// we need to set the Y offset so that their scroll position is the same as it was while streaming
+			// TODO: may need to do this regardless
+			yOffset := m.viewport.YOffset
+			newLineCount := m.viewport.TotalLineCount()
+			m.viewport.SetYOffset(newLineCount - curLineCount + yOffset)
 		}
 		m.preventScrollToBottom = false
 		if !m.textarea.Focused() {
