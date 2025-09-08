@@ -92,7 +92,7 @@ func (c *ChatModel) AddResponse() {
 }
 
 // Render returns a string of the entire chat history in markdown, wrapped to a certain width. If the vpWidth hasn't changed since the
-// last call to this func, the pre-rendered chat history will be reused and the ResponseStream will be appended to it
+// last call to this func, the pre-rendered chat history will be reused. If streaming, only the streamed response is returned, for UX reasons
 func (c *ChatModel) Render(vpWidth int) string {
 	numChatEntries := max(c.numPrompts(), c.numResponses())
 	if numChatEntries == 0 {
@@ -102,18 +102,25 @@ func (c *ChatModel) Render(vpWidth int) string {
 
 	// only render stream if streaming
 	if c.stream.Len() > 0 {
-		return string(c.renderResponseStream(responseWidth))
+		var renderedBytes []byte
+		if c.stream.response.Len() > 0 {
+			renderedBytes = c.Markdown.Render(c.stream.response.Bytes(), responseWidth)
+		} else {
+			// TODO: don't print reasoning if model doesn't support (haiku) or user said no reasoning
+			renderedBytes = c.Markdown.Render(c.stream.reasoning.Bytes(), responseWidth)
+		}
+		return string(renderedBytes)
 	}
 
 	// else, render entire history
 	// viewport width has changed. we must now re-render all prompts and responses so they wrap correctly
 	if vpWidth != c.Markdown.CurrentWidth {
 		c.renderedHistory.Reset()
-		c.numChatsRendered = c.renderChatHistory(0, vpWidth, responseWidth, false)
+		c.numChatsRendered = c.renderChatHistory(0, vpWidth, responseWidth)
 	} else {
 		// when we have a new prompt or response, append to renderedHistory the latest rendered prompt/response
 		if c.numChatsRendered < numChatEntries {
-			c.numChatsRendered = c.renderChatHistory(c.numChatsRendered, vpWidth, responseWidth, false)
+			c.numChatsRendered = c.renderChatHistory(c.numChatsRendered, vpWidth, responseWidth)
 		}
 	}
 	return c.renderedHistory.String()
@@ -121,7 +128,7 @@ func (c *ChatModel) Render(vpWidth int) string {
 
 // renderChatHistory iterates through the chat history starting at the given index and writes to .renderedHistory text to display
 // on screen. If the viewport width has changed since the last render, the text will be resized accordingly by c.Markdown.Render
-func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int, _ bool) (count int) {
+func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int) (count int) {
 	maxPromptWidth := int(float64(vpWidth) * styles.WIDTH_PROPORTION_PROMPT)
 	marginText := lipgloss.NewStyle().Width(vpWidth - maxPromptWidth).Render("")
 	promptStyle := lipgloss.NewStyle().Inherit(styles.ChatStyles.PromptText).Width(maxPromptWidth)
@@ -142,15 +149,6 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int, _ bo
 		}
 	}
 	return
-}
-
-func (c *ChatModel) renderResponseStream(width int) []byte {
-	if c.stream.response.Len() > 0 {
-		return c.Markdown.Render(c.stream.response.Bytes(), width)
-	}
-	// TODO: don't print reasoning if model doesn't support (haiku) or user said no reasoning
-	return c.Markdown.Render(c.stream.reasoning.Bytes(), width)
-
 }
 
 func (c *ChatModel) Clear() {

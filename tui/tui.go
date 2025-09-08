@@ -369,6 +369,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			// user has scrolled up during streaming. since we are now prepending the entire chat history before the latest response,
 			// we need to set the Y offset so that their scroll position is the same as it was while streaming
+			// TODO: may need to do this regardless
 			yOffset := m.viewport.YOffset
 			newLineCount := m.viewport.TotalLineCount()
 			m.viewport.SetYOffset(newLineCount - curLineCount + yOffset)
