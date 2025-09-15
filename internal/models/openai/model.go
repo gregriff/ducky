@@ -7,8 +7,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gregriff/ducky/models"
-	"github.com/gregriff/ducky/utils"
+	"github.com/gregriff/ducky/internal/models"
+	"github.com/gregriff/ducky/internal/utils"
 	openai "github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/packages/param"
 	"github.com/openai/openai-go/v2/responses"

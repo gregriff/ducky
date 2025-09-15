@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gregriff/ducky/models"
+	"github.com/gregriff/ducky/internal/models"
 )
 
 type AnthropicModelConfig struct {

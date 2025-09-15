@@ -7,7 +7,7 @@ import (
 	"context"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/gregriff/ducky/models"
+	"github.com/gregriff/ducky/internal/models"
 )
 
 // AnthropicModel satisfies the models.LLM interface
