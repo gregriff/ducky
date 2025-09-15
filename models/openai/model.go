@@ -97,7 +97,6 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 		// Include:         []responses.ResponseIncludable{"reasoning.encrypted_content"},
 	})
 
-	// message := responses.ResponseOutputMessage{}
 	for stream.Next() {
 		chunk := stream.Current()
 		// responses.ResponseOutputText  // a helper
