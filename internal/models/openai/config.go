@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gregriff/ducky/models"
+	"github.com/gregriff/ducky/internal/models"
 	"github.com/openai/openai-go/v2/shared"
 )
 

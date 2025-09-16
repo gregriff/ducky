@@ -4,7 +4,7 @@ import (
 	"bytes"
 
 	"github.com/charmbracelet/lipgloss/v2"
-	styles "github.com/gregriff/ducky/tui/styles"
+	styles "github.com/gregriff/ducky/internal/styles"
 )
 
 // ChatModel stores the state of the current chat with the LLM and formats prompts/responses

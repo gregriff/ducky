@@ -2,7 +2,7 @@ package tui
 
 import (
 	"github.com/charmbracelet/lipgloss/v2"
-	styles "github.com/gregriff/ducky/tui/styles"
+	styles "github.com/gregriff/ducky/internal/styles"
 )
 
 // ChatEntry contains unformatted chat text for storage (but still valid Markdown)

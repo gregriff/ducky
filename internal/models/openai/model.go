@@ -7,8 +7,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gregriff/ducky/models"
-	"github.com/gregriff/ducky/utils"
+	"github.com/gregriff/ducky/internal/models"
+	"github.com/gregriff/ducky/internal/utils"
 	openai "github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/packages/param"
 	"github.com/openai/openai-go/v2/responses"
@@ -97,7 +97,6 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 		// Include:         []responses.ResponseIncludable{"reasoning.encrypted_content"},
 	})
 
-	// message := responses.ResponseOutputMessage{}
 	for stream.Next() {
 		chunk := stream.Current()
 		// responses.ResponseOutputText  // a helper

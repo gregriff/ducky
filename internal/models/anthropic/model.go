@@ -7,7 +7,7 @@ import (
 	"context"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/gregriff/ducky/models"
+	"github.com/gregriff/ducky/internal/models"
 )
 
 // AnthropicModel satisfies the models.LLM interface
@@ -74,6 +74,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 	})
 
 	message := anthropic.Message{}
+	message.Content = make([]anthropic.ContentBlockUnion, maxTokens/4) // preallocate cuz why not
 	for stream.Next() {
 		event := stream.Current()
 		err := message.Accumulate(event)
