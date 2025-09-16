@@ -4,7 +4,6 @@
 - use variadic options to init TUIModel from CLI args
 
 #### Bugs:
-- there is some bug where viewport scrolls when typing a multiline prompt. viewport needs to be scrollable. Width decreases over time and persists. THIS HAPPENS AFTER A PASTE. typing after a paste uses a ton of CPU and lags
 - cursor is broken since migration to bubbletea V2 (tell it to blink, seperate from the focus cmd now)
 - cursor should be placed at end of line when placeholder shows up
 - textarea is not foused on startup on tmux

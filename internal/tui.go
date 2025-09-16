@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/bubbles/v2/cursor"
 	"github.com/charmbracelet/bubbles/v2/spinner"
 	"github.com/charmbracelet/bubbles/v2/textarea"
 	"github.com/charmbracelet/bubbles/v2/viewport"
@@ -121,7 +122,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds []tea.Cmd
 	)
 
-	// log.Printf("%#v", msg)
+	// log.Printf("\n\nMESSAGE RECIEVED: %#v", msg)
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -334,6 +335,13 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.FocusMsg:
 		return m, m.textarea.Focus()
 
+	case cursor.BlinkMsg:
+		if m.textarea.Focused() {
+			m.textarea, taCmd = m.textarea.Update(msg)
+			return m, taCmd
+		}
+		return m, nil
+
 	case makeInitialPrompt:
 		return m.promptLLM(m.initialPrompt)
 
@@ -376,6 +384,9 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.preventScrollToBottom = false
 		if !m.textarea.Focused() {
+			// TODO: should check here that terminal has focus,
+			// (user has changed windows since stream began)
+			// otherwise Blink{} messages will continue to loop
 			return m, m.textarea.Focus()
 		}
 		return m, nil
@@ -415,6 +426,10 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// TODO: resizing window while textarea is not focused may prevent textarea resizing until it is focused
 	if m.textarea.Focused() {
+		if msg == nil && len(cmds) == 0 {
+			return m, nil
+		}
+
 		var newHeight int
 		expanded, collapsed := styles.TEXTAREA_HEIGHT_NORMAL, styles.TEXTAREA_HEIGHT_COLLAPSED
 		if m.textarea.Length() > 0 {
@@ -448,7 +463,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// prevent movement keys from scrolling the viewport
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		switch msg.Key().Text {
 		case "d", "u", "b", "j", "k":
 			break
 		}
