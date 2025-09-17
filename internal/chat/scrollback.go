@@ -19,7 +19,7 @@ func NewTraverser(historyPtr *[]ChatEntry) *Traverser {
 	return &Traverser{
 		history:       historyPtr,
 		currentIdx:    -1,
-		editedPrompts: make(map[int]string),
+		editedPrompts: make(map[int]string, 10),
 	}
 }
 

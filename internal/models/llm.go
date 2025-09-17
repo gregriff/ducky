@@ -1,8 +1,7 @@
-/*
- * Defines fields and behavior of all supported LLMs
- */
+// package models contains interfaces and implemetations of language models from multiple providers
 package models
 
+// LLM defines fields and behavior of all supported LLMs
 type LLM interface {
 	DoStreamPromptCompletion(
 		prompt string,

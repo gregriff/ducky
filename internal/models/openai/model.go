@@ -89,7 +89,7 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 	// https://pkg.go.dev/github.com/openai/openai-go/v2/responses#ResponseNewParams
 	stream := llm.Client.Responses.NewStreaming(context.TODO(), responses.ResponseNewParams{
 		Model:           shared.ResponsesModel(llm.ModelConfig.Id),
-		Input:           buildMessages(llm.Messages, content),
+		Input:           llm.buildMessages(content),
 		Reasoning:       reasoning,
 		Instructions:    param.Opt[string]{Value: llm.SystemPrompt},
 		MaxOutputTokens: param.Opt[int64]{Value: maxTokens},
@@ -137,15 +137,17 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 }
 
 // buildMessages takes the provider-agnostic []models.Message of the chat history and returns the OpenAI chat history data format
-func buildMessages(history []models.Message, newContent string) responses.ResponseNewParamsInputUnion {
-	messages := make([]responses.ResponseInputItemUnionParam, 0, len(history)+1)
+func (llm *OpenAIModel) buildMessages(newContent string) responses.ResponseNewParamsInputUnion {
+	messages := make([]responses.ResponseInputItemUnionParam, 0, len(llm.Messages)+1)
 	var (
 		currentResponseInputParam  responses.ResponseInputItemUnionParam
 		currentMessageContentParam responses.EasyInputMessageContentUnionParam
+		msg                        models.Message
 	)
 
 	// Add conversation history
-	for _, msg := range history {
+	for i := range len(llm.Messages) {
+		msg = llm.Messages[i]
 		currentMessageContentParam = responses.EasyInputMessageContentUnionParam{OfString: param.Opt[string]{Value: msg.Content}}
 
 		switch msg.Role {
