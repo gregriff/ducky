@@ -63,3 +63,5 @@ require (
 	golang.org/x/text v0.27.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/muesli/termenv => github.com/gregriff/termenv v0.16.100

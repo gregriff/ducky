@@ -5,14 +5,12 @@ import (
 	"os"
 
 	"github.com/charmbracelet/glamour"
-	"github.com/muesli/reflow/wrap"
 )
 
 // MarkdownRenderer wraps glamour.TermRenderer and handles Markdown rendering
 // as well as resizing the renderable area of the screen.
 type MarkdownRenderer struct {
 	renderer     *glamour.TermRenderer
-	wrapper      wrap.Wrap
 	CurrentWidth int
 
 	style string

@@ -1,5 +1,13 @@
 ## TODO List
 
+#### High Priority
+###### Profiles:
+Preset config options to use for the chat
+- users can say "use the python profile" and then we just specify the Python Chroma lexer instead of having the lexer slowly guess from the chat history
+- users can specify multiple (programming language) profiles to use more lexers
+- profiles can change system messages of course
+> Examples: `cli profile create (or create-profile?)` `cli run --profile=` `cli profile edit (or edit-profile?)` `cli profile set-default (or set-default-profile?)`
+
 #### 100 Go Mistakes Lessons:
 - use variadic options to init TUIModel from CLI args
 
@@ -35,13 +43,6 @@
 #### Configuration:
 - add color configs:
   - UI elements
-
-#### Profiles:
-Preset config options to use for the chat
-- users can say "use the python profile" and then we just specify the Python Chroma lexer instead of having the lexer slowly guess from the chat history
-- users can specify multiple (programming language) profiles to use more lexers
-- profiles can change system messages of course
-> Examples: `cli profile create (or create-profile?)` `cli run --profile=` `cli profile edit (or edit-profile?)` `cli profile set-default (or set-default-profile?)`
 
 
 #### Selection/Copying:
