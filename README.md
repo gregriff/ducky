@@ -28,7 +28,9 @@ Edit the `$XDG_CONFIG_HOME/ducky/ducky.toml` that was created for you.
 
 ### Q&A
 - *Why the terminal?*
-> I like to juggle several chats at once, and I'd rather let tmux handle that instead of having several LLM browser tabs open. Also, all IDEs have a terminal, so any developer can easily incorporate this tool into their existing workflow.
+> I like to juggle several chats at once, and I'd rather use a terminal multiplexer instead of having several LLM browser tabs open. Also, all IDEs have a terminal, so any developer can easily incorporate this tool into their existing workflow.
+> In addition, LLM's are currently accessed most easily via browsers or native apps. On older linux hardware like Raspberry Pi's,
+> these GUIs either don't exist or run slowly. A lightweight terminal-based LLM client allows even these machines to access LLMs.
 
 - *Does this support agentic workflows?*
 > No. I'll let the IDEs and model providers handle that. This is a simple prompt/response loop.

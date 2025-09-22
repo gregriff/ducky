@@ -69,7 +69,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 		Model:     anthropic.Model(llm.ModelConfig.Id),
 		System:    llm.SystemPromptObject,
 		MaxTokens: maxTokens,
-		Messages:  buildMessages(llm.Messages, content),
+		Messages:  llm.buildMessages(content),
 		Thinking:  thinking,
 	})
 
@@ -113,11 +113,13 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 }
 
 // buildMessages takes the provider-agnostic []models.Message of the chat history and returns the Anthropic chat history data format
-func buildMessages(history []models.Message, newContent string) []anthropic.MessageParam {
-	messages := make([]anthropic.MessageParam, 0, len(history)+1)
+func (llm *AnthropicModel) buildMessages(newContent string) []anthropic.MessageParam {
+	messages := make([]anthropic.MessageParam, 0, len(llm.Messages)+1)
+	var msg models.Message
 
 	// Add conversation history
-	for _, msg := range history {
+	for i := range len(llm.Messages) {
+		msg = llm.Messages[i]
 		switch msg.Role {
 		case "user":
 			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content)))
@@ -128,7 +130,6 @@ func buildMessages(history []models.Message, newContent string) []anthropic.Mess
 
 	// Add current message
 	messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(newContent)))
-
 	return messages
 }
 

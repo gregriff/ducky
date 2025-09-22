@@ -47,8 +47,8 @@ func (c *ChatModel) numPrompts() int {
 
 func (c *ChatModel) numResponses() int {
 	totalResponses := 0
-	for _, entry := range c.history {
-		if len(entry.response) > 0 {
+	for i := range len(c.history) {
+		if len(c.history[i].response) > 0 {
 			totalResponses += 1
 		}
 	}
@@ -153,7 +153,7 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int) (cou
 
 func (c *ChatModel) Clear() {
 	// TODO: save unsaved history in temporary sqlite DB or in-memory for accidental clears
-	c.history = c.history[:0]
+	c.history = make([]ChatEntry, 0, 10)
 	c.numChatsRendered = 0
 	c.renderedHistory.Reset()
 }

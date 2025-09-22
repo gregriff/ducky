@@ -6,7 +6,9 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"runtime"
 	"strings"
 
 	tui "github.com/gregriff/ducky/internal"
@@ -18,6 +20,9 @@ import (
 	"golang.org/x/term"
 
 	zone "github.com/lrstanley/bubblezone/v2"
+
+	"net/http"
+	_ "net/http/pprof"
 )
 
 // runCmd represents the run command
@@ -171,5 +176,7 @@ func runTUI(cmd *cobra.Command, args []string) {
 		maxTokens,
 		style,
 	)
+	runtime.SetCPUProfileRate(200)
+	go func() { log.Println(http.ListenAndServe("localhost:6060", nil)) }()
 	tui.Start(initialPrompt)
 }
