@@ -1,4 +1,4 @@
-package tui
+package styles
 
 const (
 	H_PADDING        int = 1

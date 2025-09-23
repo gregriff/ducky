@@ -1,7 +1,8 @@
-package tui
+package styles
 
 import "github.com/charmbracelet/lipgloss/v2"
 
+// TUIStylesStruct defines style constants for the UI of the application.
 type TUIStylesStruct struct {
 	TitleBar,
 	PromptText,
@@ -14,7 +15,6 @@ var (
 	ColorSecondary = lipgloss.Color("#CCD4FF") // light blue
 )
 
-// makeStyles declares formatting for text throughout the TUI.
 var TUIStyles = TUIStylesStruct{
 	TitleBar: lipgloss.NewStyle().
 		Foreground(ColorPrimary).

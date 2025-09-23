@@ -1,25 +1,24 @@
-/*
- * Adds additional fields and implements behavior of Anthropic LLMs
- */
 package anthropic
 
 import (
 	"context"
+	"errors"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/gregriff/ducky/internal/models"
 )
 
-// AnthropicModel satisfies the models.LLM interface.
-type AnthropicModel struct {
+// Model encapsulates an Anthropic model and satisfies the models.LLM interface.
+type Model struct {
 	models.BaseLLM
 	Client             anthropic.Client
-	ModelConfig        AnthropicModelConfig
+	ModelConfig        ModelConfig
 	SystemPromptObject []anthropic.TextBlockParam
 	// TODO: add usage field
 }
 
-func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message) *AnthropicModel {
+// NewModel creates a new Anthropic Model to be used for response streaming.
+func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message) *Model {
 	// allow message history to persist when user changes model being used
 	var messages []models.Message
 	if pastMessages != nil {
@@ -28,7 +27,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 		messages = []models.Message{}
 	}
 
-	return &AnthropicModel{
+	return &Model{
 		BaseLLM: models.BaseLLM{
 			SystemPrompt: systemPrompt,
 			MaxTokens:    maxTokens,
@@ -41,7 +40,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 	}
 }
 
-func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
+func (llm *Model) DoStreamPromptCompletion(content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
@@ -66,7 +65,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 	}
 
 	stream := llm.Client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
-		Model:     anthropic.Model(llm.ModelConfig.Id),
+		Model:     anthropic.Model(llm.ModelConfig.ID),
 		System:    llm.SystemPromptObject,
 		MaxTokens: maxTokens,
 		Messages:  llm.buildMessages(content),
@@ -80,7 +79,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 		err := message.Accumulate(event)
 		if err != nil {
 			// TODO: format anthropic error message here
-			return models.StreamError{ErrMsg: stream.Err().Error()}
+			return errors.New(stream.Err().Error())
 		}
 
 		switch eventVariant := event.AsAny().(type) {
@@ -100,11 +99,11 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 	}
 
 	if stream.Err() != nil {
-		return models.StreamError{ErrMsg: stream.Err().Error()}
+		return errors.New(stream.Err().Error())
 	}
 
 	// update state
-	llm.PromptCount += 1
+	llm.PromptCount++
 
 	if len(fullResponseText) > 0 {
 		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: fullResponseText})
@@ -113,7 +112,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 }
 
 // buildMessages takes the provider-agnostic []models.Message of the chat history and returns the Anthropic chat history data format.
-func (llm *AnthropicModel) buildMessages(newContent string) []anthropic.MessageParam {
+func (llm *Model) buildMessages(newContent string) []anthropic.MessageParam {
 	messages := make([]anthropic.MessageParam, 0, len(llm.Messages)+1)
 	var msg models.Message
 
@@ -133,25 +132,25 @@ func (llm *AnthropicModel) buildMessages(newContent string) []anthropic.MessageP
 	return messages
 }
 
-func (llm *AnthropicModel) DoGetCostOfCurrentChat() float64 {
+func (llm *Model) DoGetCostOfCurrentChat() float64 {
 	return -1.
 }
 
-func (llm *AnthropicModel) DoClearChatHistory() {
+func (llm *Model) DoClearChatHistory() {
 	llm.PromptCount = 0
 	llm.Messages = []models.Message{}
 	// TODO: reset usage
 }
 
-func (llm *AnthropicModel) DoGetChatHistory() []models.Message {
+func (llm *Model) DoGetChatHistory() []models.Message {
 	return llm.Messages
 }
 
-func (llm *AnthropicModel) DoGetModelId() string {
-	return llm.ModelConfig.Id
+func (llm *Model) DoGetModelId() string {
+	return llm.ModelConfig.ID
 }
 
-func (llm *AnthropicModel) DoesSupportReasoning() bool {
+func (llm *Model) DoesSupportReasoning() bool {
 	if thinking := llm.ModelConfig.Thinking; thinking != nil && *thinking {
 		return true
 	}

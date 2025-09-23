@@ -1,6 +1,7 @@
+// Package math exports math functions reused throughout the program
 package math
 
-// clamp is a copy/pasted func from bubbles/textarea, in order to replicate its internal behavior.
+// Clamp is a copy/pasted func from bubbles/textarea, in order to replicate its internal behavior.
 func Clamp(v, low, high int) int {
 	if high < low {
 		low, high = high, low

@@ -30,6 +30,12 @@ linters:
       - text: '(slog|log)\.\w+'
         linters:
           - noctx
+      - linters:
+          - revive
+        text: 'var-naming:'
+      - linters:
+          - revive
+        text: 'exported:'
     generated: lax
     presets:
       - common-false-positives

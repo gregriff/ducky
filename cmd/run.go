@@ -1,15 +1,9 @@
-/*
-Copyright © 2025 Greg Griffin <greg.griffin2@gmail.com>
-*/
 package cmd
 
 import (
 	"fmt"
 	"io"
-	"log"
-	"net/http"
 	"os"
-	"runtime"
 	"strings"
 
 	tui "github.com/gregriff/ducky/internal"
@@ -21,8 +15,7 @@ import (
 	"golang.org/x/term"
 
 	zone "github.com/lrstanley/bubblezone/v2"
-
-	_ "net/http/pprof"
+	// _ "net/http/pprof".
 )
 
 // runCmd represents the run command.
@@ -31,7 +24,7 @@ var runCmd = &cobra.Command{
 	Short: "Create a new prompt session with a model",
 	Long:  `Begin a prompt session with a specified model.`,
 	Args:  cobra.MaximumNArgs(1),
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(_ *cobra.Command, args []string) error {
 		if len(args) > 0 {
 			viper.Set("model", args[0])
 		}
@@ -49,14 +42,14 @@ var runCmd = &cobra.Command{
 		switch {
 		case anthropicErr != nil && openAIErr != nil:
 			// Model is neither openai nor anthropic, combine error messages
-			return fmt.Errorf("Invalid model name: %s\n%v\n%v", modelName, anthropicErr, openAIErr)
+			return fmt.Errorf("invalid model name: %s\n%v\n%v", modelName, anthropicErr, openAIErr)
 		case anthropicErr != nil:
-			return fmt.Errorf("Invalid model name: %s\n%v", modelName, anthropicErr)
+			return fmt.Errorf("invalid model name: %s\n%v", modelName, anthropicErr)
 		case openAIErr != nil:
-			return fmt.Errorf("Invalid model name: %s\n%v", modelName, openAIErr)
+			return fmt.Errorf("invalid model name: %s\n%v", modelName, openAIErr)
 		default:
 			// This shouldn't happen if validation functions are implemented correctly
-			return fmt.Errorf("Invalid model name: %s", modelName)
+			return fmt.Errorf("invalid model name: %s", modelName)
 		}
 	},
 	Run: runTUI,
@@ -69,52 +62,52 @@ func init() {
 
 	flagName = "system-prompt"
 	rootCmd.PersistentFlags().StringP(flagName, "P", "", "system prompt that will influence model responses")
-	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, "You are a concise assistant to a software engineer")
 
 	flagName = "reasoning"
 	rootCmd.PersistentFlags().BoolP(flagName, "r", true, "enable reasoning/thinking for supported models")
-	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, true)
 
 	flagName = "reasoning-effort"
 	rootCmd.PersistentFlags().Uint8P(flagName, "e", 4, "reasoning effort to be used for specific OpenAI reasoning models. (1-4)")
-	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, 4)
 
 	flagName = "max-tokens"
 	rootCmd.PersistentFlags().IntP(flagName, "t", 0, "output token budget for each response")
-	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, 2048)
 
 	flagName = "style"
 	rootCmd.PersistentFlags().StringP(flagName, "s", "", "glamour style used to render Markdown responses (default tokyo-night)")
-	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, "tokyo-night")
 
 	flagName = "force-interactive"
 	rootCmd.PersistentFlags().Bool(flagName, false, "if stdin is a pipe, setting this option loads the TUI instead of just printing to stdout")
-	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, false)
 
 	flagName = "anthropic-api-key"
 	rootCmd.PersistentFlags().String(flagName, "", "allows access to Claude models")
-	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 
 	flagName = "openai-api-key"
 	rootCmd.PersistentFlags().String(flagName, "", "allows access to OpenAI models")
-	viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 }
 
-func runTUI(cmd *cobra.Command, args []string) {
+func runTUI(_ *cobra.Command, _ []string) {
 	// note: x_API_KEY will override DUCKY_x_API_KEY here
 	_, exists := os.LookupEnv("OPENAI_API_KEY")
 	if !exists {
-		os.Setenv("OPENAI_API_KEY", viper.GetString("openai-api-key"))
+		_ = os.Setenv("OPENAI_API_KEY", viper.GetString("openai-api-key"))
 	}
 	_, exists = os.LookupEnv("ANTHROPIC_API_KEY")
 	if !exists {
-		os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
+		_ = os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
 	}
 
 	systemPrompt, modelName, reasoning, effort, maxTokens, style := viper.GetString("system-prompt"),
@@ -175,7 +168,7 @@ func runTUI(cmd *cobra.Command, args []string) {
 		maxTokens,
 		style,
 	)
-	runtime.SetCPUProfileRate(200)
-	go func() { log.Println(http.ListenAndServe("localhost:6060", nil)) }()
+	// runtime.SetCPUProfileRate(200)
+	// go func() { log.Println(http.ListenAndServe("localhost:6060", nil)) }()
 	tui.Start(initialPrompt)
 }

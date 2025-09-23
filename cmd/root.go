@@ -1,10 +1,8 @@
-/*
-Copyright © 2025 Greg Griffin <greg.griffin2@gmail.com>
-*/
+// Package cmd contains the CLI setup and commands exposed to the user
 package cmd
 
 import (
-	_ "embed"
+	_ "embed" // used to embed the default Markdown styling config file.
 	"fmt"
 	"os"
 

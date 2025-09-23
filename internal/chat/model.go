@@ -1,4 +1,4 @@
-package tui
+package chat
 
 import (
 	"bytes"
@@ -7,9 +7,9 @@ import (
 	styles "github.com/gregriff/ducky/internal/styles"
 )
 
-// ChatModel stores the state of the current chat with the LLM and formats prompts/responses.
-type ChatModel struct {
-	history    []ChatEntry
+// Model stores the state of the current chat with the LLM and formats prompts/responses.
+type Model struct {
+	history    []Entry
 	stream     *ResponseStream
 	Scrollback *Traverser
 	TotalCost  float64
@@ -31,25 +31,26 @@ func (s *ResponseStream) Len() int {
 	return s.reasoning.Len() + s.response.Len()
 }
 
-func NewChatModel(glamourStyle string) *ChatModel {
-	model := ChatModel{
+// NewChatModel creates a new Chat model with markdown streaming capablities.
+func NewChatModel(glamourStyle string) *Model {
+	model := Model{
 		stream:   &ResponseStream{},
-		history:  make([]ChatEntry, 0, 10),
+		history:  make([]Entry, 0, 10),
 		Markdown: NewMarkdownRenderer(glamourStyle),
 	}
 	model.Scrollback = NewTraverser(&model.history)
 	return &model
 }
 
-func (c *ChatModel) numPrompts() int {
+func (c *Model) numPrompts() int {
 	return len(c.history) // prompts determine the creation of new chat entries
 }
 
-func (c *ChatModel) numResponses() int {
+func (c *Model) numResponses() int {
 	totalResponses := 0
 	for i := range len(c.history) {
 		if len(c.history[i].response) > 0 {
-			totalResponses += 1
+			totalResponses++
 		}
 	}
 	return totalResponses
@@ -57,7 +58,7 @@ func (c *ChatModel) numResponses() int {
 
 // AccumulateStream takes a chunk of streamed text from an LLM API, or an error message and records it to the response stream
 // for later processing/storage.
-func (c *ChatModel) AccumulateStream(chunk string, isReasoning, isError bool) {
+func (c *Model) AccumulateStream(chunk string, isReasoning, isError bool) {
 	if isError {
 		c.stream.error = chunk
 		return
@@ -71,12 +72,12 @@ func (c *ChatModel) AccumulateStream(chunk string, isReasoning, isError bool) {
 }
 
 // AddPrompt creates a new ChatEntry with prompt data.
-func (c *ChatModel) AddPrompt(s string) {
-	c.history = append(c.history, ChatEntry{prompt: s})
+func (c *Model) AddPrompt(s string) {
+	c.history = append(c.history, Entry{prompt: s})
 }
 
 // AddResponse updates the latest ChatEntry with the data from ResponseStream. Must be called after AddPrompt.
-func (c *ChatModel) AddResponse() {
+func (c *Model) AddResponse() {
 	stream := c.stream
 
 	curEntry := &c.history[len(c.history)-1]
@@ -93,7 +94,7 @@ func (c *ChatModel) AddResponse() {
 
 // Render returns a string of the entire chat history in markdown, wrapped to a certain width. If the vpWidth hasn't changed since the
 // last call to this func, the pre-rendered chat history will be reused. If streaming, only the streamed response is returned, for UX reasons.
-func (c *ChatModel) Render(vpWidth int) string {
+func (c *Model) Render(vpWidth int) string {
 	numChatEntries := max(c.numPrompts(), c.numResponses())
 	if numChatEntries == 0 {
 		return ""
@@ -128,14 +129,14 @@ func (c *ChatModel) Render(vpWidth int) string {
 
 // renderChatHistory iterates through the chat history starting at the given index and writes to .renderedHistory text to display
 // on screen. If the viewport width has changed since the last render, the text will be resized accordingly by c.Markdown.Render.
-func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int) (count int) {
+func (c *Model) renderChatHistory(startingIndex, vpWidth, resWidth int) (count int) {
 	maxPromptWidth := int(float64(vpWidth) * styles.WIDTH_PROPORTION_PROMPT)
 	marginText := lipgloss.NewStyle().Width(vpWidth - maxPromptWidth).Render("")
 	promptStyle := lipgloss.NewStyle().Inherit(styles.ChatStyles.PromptText).Width(maxPromptWidth)
 
 	count = len(c.history)
 	for i := startingIndex; i < count; i++ {
-		prompt, response, error := c.history[i].formattedPrompt(marginText, promptStyle, maxPromptWidth),
+		prompt, response, err := c.history[i].formattedPrompt(marginText, promptStyle, maxPromptWidth),
 			c.history[i].response,
 			c.history[i].error
 
@@ -143,20 +144,22 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int) (cou
 		c.renderedHistory.WriteString("\n")
 		c.renderedHistory.Write(c.Markdown.Render(response, resWidth))
 
-		if len(error) > 0 {
-			c.renderedHistory.Write(c.Markdown.Render([]byte(error), resWidth))
+		if len(err) > 0 {
+			c.renderedHistory.Write(c.Markdown.Render([]byte(err), resWidth))
 		}
 	}
 	return count
 }
 
-func (c *ChatModel) Clear() {
+// Clear clears the chat history.
+func (c *Model) Clear() {
 	// TODO: save unsaved history in temporary sqlite DB or in-memory for accidental clears
-	c.history = make([]ChatEntry, 0, 10)
+	c.history = make([]Entry, 0, 10)
 	c.numChatsRendered = 0
 	c.renderedHistory.Reset()
 }
 
-func (c *ChatModel) HistoryLen() int {
+// HistoryLen returns the number of chat entries in the history.
+func (c *Model) HistoryLen() int {
 	return len(c.history)
 }

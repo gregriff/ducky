@@ -1,21 +1,22 @@
-package tui
+package chat
 
 import (
 	"fmt"
 )
 
-// scrollback.Traverser provides functionality that enables the TUI textarea to cycle through the prompt history
+// Traverser provides functionality that enables the TUI textarea to cycle through the prompt history
 // by performing read-only operations on ChatModel.history. It's a bi-directional iterator over the prompt history
 // that keeps track of modifications made to any prompt in the history, until the user submits the prompt.
-// It attempts to emulate Python's REPL history traversal
+// It attempts to emulate Python's REPL history traversal.
 type Traverser struct {
-	history       *[]ChatEntry
+	history       *[]Entry
 	currentIdx    int            // corresponds to the prompt currently visible in the prompt textarea
 	userInput     string         // what the user typed in the textarea before traversing the history
 	editedPrompts map[int]string // stores idx:prompt mappings for prompts that the user modifies when traversing history
 }
 
-func NewTraverser(historyPtr *[]ChatEntry) *Traverser {
+// NewTraverser creates a new scrollback traverser.
+func NewTraverser(historyPtr *[]Entry) *Traverser {
 	return &Traverser{
 		history:       historyPtr,
 		currentIdx:    -1,
@@ -23,7 +24,7 @@ func NewTraverser(historyPtr *[]ChatEntry) *Traverser {
 	}
 }
 
-// getPrompt returns the prompt at the given index
+// getPrompt returns the prompt at the given index.
 func (t *Traverser) getPrompt(idx int) string {
 	historyLen := len(*t.history)
 	if 0 > idx || idx >= historyLen {
@@ -32,7 +33,7 @@ func (t *Traverser) getPrompt(idx int) string {
 	return (*t.history)[idx].prompt
 }
 
-// NextPrompt should not be called if the prompt history is empty
+// NextPrompt should not be called if the prompt history is empty.
 func (t *Traverser) NextPrompt(visibleText string) (prompt string, found bool) {
 	// log.Printf("\nNEXT CALLED: %d\n", t.currentIdx)
 	historyLen := len(*t.history)
@@ -62,7 +63,7 @@ func (t *Traverser) NextPrompt(visibleText string) (prompt string, found bool) {
 	}
 
 	nextPrompt := t.getPrompt(t.currentIdx + 1)
-	t.currentIdx += 1
+	t.currentIdx++
 
 	if modifiedPrompt, exists := t.editedPrompts[t.currentIdx]; exists {
 		return modifiedPrompt, true
@@ -71,7 +72,7 @@ func (t *Traverser) NextPrompt(visibleText string) (prompt string, found bool) {
 	return nextPrompt, true
 }
 
-// PrevPrompt should not be called if the prompt history is empty
+// PrevPrompt should not be called if the prompt history is empty.
 func (t *Traverser) PrevPrompt(visibleText string) (prompt string, found bool) {
 	// log.Printf("\nPREV CALLED: %d\n", t.currentIdx)
 	historyLen := len(*t.history)
@@ -110,7 +111,7 @@ func (t *Traverser) PrevPrompt(visibleText string) (prompt string, found bool) {
 	}
 
 	prevPrompt := t.getPrompt(t.currentIdx - 1)
-	t.currentIdx -= 1
+	t.currentIdx--
 
 	if modifiedPrompt, exists := t.editedPrompts[t.currentIdx]; exists {
 		return modifiedPrompt, true
@@ -119,7 +120,7 @@ func (t *Traverser) PrevPrompt(visibleText string) (prompt string, found bool) {
 	return prevPrompt, true
 }
 
-// Reset should be called whenever the user submits a prompt to the model
+// Reset should be called whenever the user submits a prompt to the model.
 func (t *Traverser) Reset() {
 	t.currentIdx = -1
 	t.userInput = ""

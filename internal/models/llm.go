@@ -1,4 +1,4 @@
-// package models contains interfaces and implemetations of language models from multiple providers
+// Package models contains interfaces and implemetations of language models from multiple providers
 package models
 
 // LLM defines fields and behavior of all supported LLMs.
@@ -17,7 +17,10 @@ type LLM interface {
 }
 
 func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, reasoningEffort *uint8, responseChan chan StreamChunk) error {
-	return llm.DoStreamPromptCompletion(prompt, enableReasoning, reasoningEffort, responseChan)
+	if err := llm.DoStreamPromptCompletion(prompt, enableReasoning, reasoningEffort, responseChan); err != nil {
+		return StreamError{ErrMsg: err.Error()}
+	}
+	return nil
 }
 
 func GetCostOfCurrentChat(llm LLM) float64 {
@@ -49,6 +52,7 @@ type BaseLLM struct {
 	PromptCount int
 }
 
+// Message encapsulates a chunk of text data returned from the provider's API when streaming a response.
 type Message struct {
 	Role    string
 	Content string
@@ -78,8 +82,10 @@ type StreamChunk struct {
 	Content   string
 }
 
+// StreamError stores any error that occurred during response streaming.
 type StreamError struct{ ErrMsg string }
 
+// Error return the error message of a StreamError.
 func (e StreamError) Error() string {
 	return e.ErrMsg
 }

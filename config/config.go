@@ -1,12 +1,14 @@
+// Package config contains the logic to obtain app configuration from a file or the environment
 package config
 
 import (
 	"bytes"
-	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	_ "embed" // used to embed the default application config file.
 
 	"github.com/spf13/viper"
 )
@@ -14,6 +16,7 @@ import (
 //go:embed ducky.toml
 var defaultConfigFile []byte
 
+// InitConfig initializes the app config with Viper from the environment, a specified file, or a default file.
 func InitConfig(file string) {
 	viper.SetConfigName("ducky")
 	viper.SetConfigType("toml")
@@ -32,10 +35,14 @@ func InitConfig(file string) {
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// create config file from embedded default file
-			viper.ReadConfig(bytes.NewBuffer(defaultConfigFile))
+			if err := viper.ReadConfig(bytes.NewBuffer(defaultConfigFile)); err != nil {
+				fmt.Printf("Error reading default config file at path: %s", defaultConfigFile)
+				os.Exit(1)
+			}
 			configPath := filepath.Join(getConfigDir(), "ducky.toml")
-			if err := os.WriteFile(configPath, defaultConfigFile, 0o644); err != nil {
+			if err := os.WriteFile(configPath, defaultConfigFile, 0o600); err != nil {
 				fmt.Printf("Error writing default config: %v", err)
+				os.Exit(1)
 			}
 		} else {
 			fmt.Println("Error reading config file: ", err)
@@ -51,6 +58,9 @@ func getConfigDir() string {
 		configHome = filepath.Join(homeDir, ".config")
 	}
 	appConfigDir := filepath.Join(configHome, "ducky")
-	os.MkdirAll(appConfigDir, 0o755)
+	if err := os.MkdirAll(appConfigDir, 0o750); err != nil {
+		fmt.Printf("Error creating application config file at this location: %s", appConfigDir)
+		os.Exit(1)
+	}
 	return appConfigDir
 }
