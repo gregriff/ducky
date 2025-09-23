@@ -34,7 +34,7 @@ func InitConfig(file string) {
 			// create config file from embedded default file
 			viper.ReadConfig(bytes.NewBuffer(defaultConfigFile))
 			configPath := filepath.Join(getConfigDir(), "ducky.toml")
-			if err := os.WriteFile(configPath, defaultConfigFile, 0644); err != nil {
+			if err := os.WriteFile(configPath, defaultConfigFile, 0o644); err != nil {
 				fmt.Printf("Error writing default config: %v", err)
 			}
 		} else {
@@ -42,7 +42,6 @@ func InitConfig(file string) {
 			os.Exit(1)
 		}
 	}
-
 }
 
 func getConfigDir() string {
@@ -52,6 +51,6 @@ func getConfigDir() string {
 		configHome = filepath.Join(homeDir, ".config")
 	}
 	appConfigDir := filepath.Join(configHome, "ducky")
-	os.MkdirAll(appConfigDir, 0755)
+	os.MkdirAll(appConfigDir, 0o755)
 	return appConfigDir
 }

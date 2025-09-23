@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -21,11 +22,10 @@ import (
 
 	zone "github.com/lrstanley/bubblezone/v2"
 
-	"net/http"
 	_ "net/http/pprof"
 )
 
-// runCmd represents the run command
+// runCmd represents the run command.
 var runCmd = &cobra.Command{
 	Use:   "run [model]",
 	Short: "Create a new prompt session with a model",
@@ -117,8 +117,7 @@ func runTUI(cmd *cobra.Command, args []string) {
 		os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
 	}
 
-	systemPrompt, modelName, reasoning, effort, maxTokens, style :=
-		viper.GetString("system-prompt"),
+	systemPrompt, modelName, reasoning, effort, maxTokens, style := viper.GetString("system-prompt"),
 		viper.GetString("model"),
 		viper.GetBool("reasoning"),
 		viper.GetUint8("reasoning-effort"),

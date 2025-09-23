@@ -16,7 +16,7 @@ type MarkdownRenderer struct {
 	style string
 }
 
-// NewMarkdownRenderer creates the struct but Markdown cannot be rendered until .SetWidth is called
+// NewMarkdownRenderer creates the struct but Markdown cannot be rendered until .SetWidth is called.
 func NewMarkdownRenderer(glamourStyle string) *MarkdownRenderer {
 	md := MarkdownRenderer{
 		style:        glamourStyle,
@@ -26,7 +26,7 @@ func NewMarkdownRenderer(glamourStyle string) *MarkdownRenderer {
 	return &md
 }
 
-// createNewRenderer creates or re-creates the glamour.TermRenderer, using the curWidth and style fields
+// createNewRenderer creates or re-creates the glamour.TermRenderer, using the curWidth and style fields.
 func (md *MarkdownRenderer) createNewRenderer() {
 	renderer, err := glamour.NewTermRenderer(
 		// glamour.WithAutoStyle(), // this results in a hanging func call because of an ENOTTY
@@ -42,12 +42,12 @@ func (md *MarkdownRenderer) createNewRenderer() {
 }
 
 // SetStyle will be used when the user wants to change the rendering style mid-session.
-// The application should not allow the user to do this during rendering, because I don't want to add lock overhead
+// The application should not allow the user to do this during rendering, because I don't want to add lock overhead.
 func (md *MarkdownRenderer) SetStyle(newStyle string) {
 	md.style = newStyle
 }
 
-// Render safely renders Markdown for a given width
+// Render safely renders Markdown for a given width.
 func (md *MarkdownRenderer) Render(markdown []byte, width int) []byte {
 	// if the width has changed, recreate the renderer
 	if width != md.CurrentWidth {

@@ -7,7 +7,7 @@ import (
 	styles "github.com/gregriff/ducky/internal/styles"
 )
 
-// ChatModel stores the state of the current chat with the LLM and formats prompts/responses
+// ChatModel stores the state of the current chat with the LLM and formats prompts/responses.
 type ChatModel struct {
 	history    []ChatEntry
 	stream     *ResponseStream
@@ -19,14 +19,14 @@ type ChatModel struct {
 	numChatsRendered int
 }
 
-// ResponseStream is like a buffer for the text sent from an LLM API. Once a response ends this data is moved into a ChatEntry
+// ResponseStream is like a buffer for the text sent from an LLM API. Once a response ends this data is moved into a ChatEntry.
 type ResponseStream struct {
 	reasoning bytes.Buffer
 	response  bytes.Buffer
 	error     string
 }
 
-// Len returns the total byte count of the resoning and response parts of the current response
+// Len returns the total byte count of the resoning and response parts of the current response.
 func (s *ResponseStream) Len() int {
 	return s.reasoning.Len() + s.response.Len()
 }
@@ -56,7 +56,7 @@ func (c *ChatModel) numResponses() int {
 }
 
 // AccumulateStream takes a chunk of streamed text from an LLM API, or an error message and records it to the response stream
-// for later processing/storage
+// for later processing/storage.
 func (c *ChatModel) AccumulateStream(chunk string, isReasoning, isError bool) {
 	if isError {
 		c.stream.error = chunk
@@ -70,12 +70,12 @@ func (c *ChatModel) AccumulateStream(chunk string, isReasoning, isError bool) {
 	}
 }
 
-// AddPrompt creates a new ChatEntry with prompt data
+// AddPrompt creates a new ChatEntry with prompt data.
 func (c *ChatModel) AddPrompt(s string) {
 	c.history = append(c.history, ChatEntry{prompt: s})
 }
 
-// AddResponse updates the latest ChatEntry with the data from ResponseStream. Must be called after AddPrompt
+// AddResponse updates the latest ChatEntry with the data from ResponseStream. Must be called after AddPrompt.
 func (c *ChatModel) AddResponse() {
 	stream := c.stream
 
@@ -92,7 +92,7 @@ func (c *ChatModel) AddResponse() {
 }
 
 // Render returns a string of the entire chat history in markdown, wrapped to a certain width. If the vpWidth hasn't changed since the
-// last call to this func, the pre-rendered chat history will be reused. If streaming, only the streamed response is returned, for UX reasons
+// last call to this func, the pre-rendered chat history will be reused. If streaming, only the streamed response is returned, for UX reasons.
 func (c *ChatModel) Render(vpWidth int) string {
 	numChatEntries := max(c.numPrompts(), c.numResponses())
 	if numChatEntries == 0 {
@@ -127,7 +127,7 @@ func (c *ChatModel) Render(vpWidth int) string {
 }
 
 // renderChatHistory iterates through the chat history starting at the given index and writes to .renderedHistory text to display
-// on screen. If the viewport width has changed since the last render, the text will be resized accordingly by c.Markdown.Render
+// on screen. If the viewport width has changed since the last render, the text will be resized accordingly by c.Markdown.Render.
 func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int) (count int) {
 	maxPromptWidth := int(float64(vpWidth) * styles.WIDTH_PROPORTION_PROMPT)
 	marginText := lipgloss.NewStyle().Width(vpWidth - maxPromptWidth).Render("")
@@ -135,8 +135,7 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int) (cou
 
 	count = len(c.history)
 	for i := startingIndex; i < count; i++ {
-		prompt, response, error :=
-			c.history[i].formattedPrompt(marginText, promptStyle, maxPromptWidth),
+		prompt, response, error := c.history[i].formattedPrompt(marginText, promptStyle, maxPromptWidth),
 			c.history[i].response,
 			c.history[i].error
 
@@ -148,7 +147,7 @@ func (c *ChatModel) renderChatHistory(startingIndex, vpWidth, resWidth int) (cou
 			c.renderedHistory.Write(c.Markdown.Render([]byte(error), resWidth))
 		}
 	}
-	return
+	return count
 }
 
 func (c *ChatModel) Clear() {

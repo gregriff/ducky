@@ -1,4 +1,4 @@
-package utils
+package math
 
 // clamp is a copy/pasted func from bubbles/textarea, in order to replicate its internal behavior.
 func Clamp(v, low, high int) int {

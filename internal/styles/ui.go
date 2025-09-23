@@ -14,7 +14,7 @@ var (
 	ColorSecondary = lipgloss.Color("#CCD4FF") // light blue
 )
 
-// makeStyles declares formatting for text throughout the TUI
+// makeStyles declares formatting for text throughout the TUI.
 var TUIStyles = TUIStylesStruct{
 	TitleBar: lipgloss.NewStyle().
 		Foreground(ColorPrimary).

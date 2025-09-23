@@ -7,15 +7,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gregriff/ducky/internal/math"
 	"github.com/gregriff/ducky/internal/models"
-	"github.com/gregriff/ducky/internal/utils"
 	openai "github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/packages/param"
 	"github.com/openai/openai-go/v2/responses"
 	"github.com/openai/openai-go/v2/shared"
 )
 
-// OpenAIModel satisfies the models.LLM interface
+// OpenAIModel satisfies the models.LLM interface.
 type OpenAIModel struct {
 	models.BaseLLM
 	Client       openai.Client
@@ -66,7 +66,7 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 		)
 
 		if reasoningEffort != nil {
-			effortNormalized = utils.Clamp(
+			effortNormalized = math.Clamp(
 				int(*reasoningEffort),
 				int(MinReasoningEffortInt),
 				int(MaxReasoningEffortInt),
@@ -136,7 +136,7 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 	return nil
 }
 
-// buildMessages takes the provider-agnostic []models.Message of the chat history and returns the OpenAI chat history data format
+// buildMessages takes the provider-agnostic []models.Message of the chat history and returns the OpenAI chat history data format.
 func (llm *OpenAIModel) buildMessages(newContent string) responses.ResponseNewParamsInputUnion {
 	messages := make([]responses.ResponseInputItemUnionParam, 0, len(llm.Messages)+1)
 	var (

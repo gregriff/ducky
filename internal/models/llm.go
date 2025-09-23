@@ -1,7 +1,7 @@
 // package models contains interfaces and implemetations of language models from multiple providers
 package models
 
-// LLM defines fields and behavior of all supported LLMs
+// LLM defines fields and behavior of all supported LLMs.
 type LLM interface {
 	DoStreamPromptCompletion(
 		prompt string,
@@ -40,7 +40,7 @@ func SupportsReasoning(llm LLM) bool {
 	return llm.DoesSupportReasoning()
 }
 
-// BaseLLM defines fields shared by all supported LLMs
+// BaseLLM defines fields shared by all supported LLMs.
 type BaseLLM struct {
 	SystemPrompt string
 	MaxTokens    int
@@ -54,7 +54,7 @@ type Message struct {
 	Content string
 }
 
-// Pricing defines costs per input or output token. They should be defined as `(cost per million) / 1,000,000`
+// Pricing defines costs per input or output token. They should be defined as `(cost per million) / 1,000,000`.
 type Pricing struct {
 	PromptCost   float64 // per token
 	ResponseCost float64 // per token
@@ -72,7 +72,7 @@ func Uint8Ptr(i uint8) *uint8 {
 
 // Bubbletea messsages
 
-// StreamChunk is the type of the channel used for communication between the API response handler and bubbletea (its also a bubbletea Msg)
+// StreamChunk is the type of the channel used for communication between the API response handler and bubbletea (its also a bubbletea Msg).
 type StreamChunk struct {
 	Reasoning bool
 	Content   string

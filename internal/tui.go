@@ -1,4 +1,4 @@
-package tui
+package internal
 
 import (
 	"fmt"
@@ -11,11 +11,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 	chat "github.com/gregriff/ducky/internal/chat"
+	"github.com/gregriff/ducky/internal/math"
 	"github.com/gregriff/ducky/internal/models"
 	"github.com/gregriff/ducky/internal/models/anthropic"
 	"github.com/gregriff/ducky/internal/models/openai"
 	styles "github.com/gregriff/ducky/internal/styles"
-	"github.com/gregriff/ducky/internal/utils"
 	zone "github.com/lrstanley/bubblezone/v2"
 	"github.com/muesli/reflow/wordwrap"
 )
@@ -52,8 +52,10 @@ type TUIModel struct {
 }
 
 // Bubbletea messages
-type makeInitialPrompt struct{}
-type streamComplete struct{}
+type (
+	makeInitialPrompt struct{}
+	streamComplete    struct{}
+)
 
 func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoningEffort *uint8, maxTokens int, glamourStyle string) *TUIModel {
 	// create and style textarea
@@ -115,12 +117,10 @@ func (m *TUIModel) Init() tea.Cmd {
 }
 
 func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var (
-		spCmd,
+	var spCmd,
 		vpCmd tea.Cmd
-	)
 
-	// log.Printf("\n\nMESSAGE RECIEVED: %#v", msg)
+	// log.Printf("\n\nMESSAGE RECEIVED: %#v", msg)
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -169,7 +169,7 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		content, _ := clipboard.ReadAll()
 		wrappedLineCount := m.getNumLines(content)
 		if wrappedLineCount > m.textarea.Height() {
-			newHeight := utils.Clamp(wrappedLineCount, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
+			newHeight := math.Clamp(wrappedLineCount, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
 			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
 			viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
 
@@ -201,7 +201,6 @@ func (m *TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if textareaFocused && m.getNumLines(m.textarea.Value()) > styles.TEXTAREA_HEIGHT_COLLAPSED {
 					m.textarea.Blur() // TODO: need to collapse it as well
 				}
-
 			} else if zone.Get("promptInput").InBounds(msg) {
 				if !textareaFocused {
 					return m, m.textarea.Focus()
@@ -414,13 +413,12 @@ func (m *TUIModel) waitForNextChunk() tea.Msg {
 		return chunk
 	}
 	return streamComplete{}
-
 }
 
-// handleStreamComplete updates TUI state when a LLM response has been fully recieved
+// handleStreamComplete updates TUI state when a LLM response has been fully received
 func (m *TUIModel) handleStreamComplete() (tea.Model, tea.Cmd) {
 	// if a StreamError occurs before response streaming begins, two waitForNextChunks will return streamComplete
-	if m.isStreaming == false {
+	if !m.isStreaming {
 		return m, nil
 	}
 	m.isStreaming = false
@@ -550,7 +548,7 @@ func (m *TUIModel) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.textarea.Height() < expanded {
 			newHeight = expanded
 		} else if numLines := m.getNumLines(m.textarea.Value()); numLines >= expanded {
-			newHeight = utils.Clamp(numLines, expanded, m.textarea.MaxHeight)
+			newHeight = math.Clamp(numLines, expanded, m.textarea.MaxHeight)
 		}
 	} else if m.textarea.Height() > collapsed {
 		newHeight = collapsed
@@ -648,7 +646,6 @@ func (m *TUIModel) headerView(width int) string {
 		style.Render(lipgloss.JoinHorizontal(lipgloss.Center, leftText, spacing, rightText)),
 	)
 	return m.headerBuilder.String()
-
 }
 
 // InitLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later

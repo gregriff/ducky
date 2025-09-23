@@ -7,7 +7,7 @@ import (
 // scrollback.Traverser provides functionality that enables the TUI textarea to cycle through the prompt history
 // by performing read-only operations on ChatModel.history. It's a bi-directional iterator over the prompt history
 // that keeps track of modifications made to any prompt in the history, until the user submits the prompt.
-// It attemps to emulate Python's REPL history traversal
+// It attempts to emulate Python's REPL history traversal
 type Traverser struct {
 	history       *[]ChatEntry
 	currentIdx    int            // corresponds to the prompt currently visible in the prompt textarea

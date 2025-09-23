@@ -14,7 +14,7 @@ import (
 
 var configFile string
 
-// rootCmd represents the base command when called without any subcommands
+// rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
 	Use:   "ducky",
 	Short: "A minimal LLM chat interface",
@@ -41,6 +41,7 @@ func Execute() {
 		os.Exit(1)
 	}
 }
+
 func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,

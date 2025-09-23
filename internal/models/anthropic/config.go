@@ -15,7 +15,7 @@ type AnthropicModelConfig struct {
 	Thinking *bool
 }
 
-// A map of Anthropic model names to properties about those models. Not to be modified
+// A map of Anthropic model names to properties about those models. Not to be modified.
 var AnthropicModelConfigurations = map[string]AnthropicModelConfig{
 	"sonnet": {
 		Id: "claude-sonnet-4-20250514",
@@ -42,7 +42,7 @@ var AnthropicModelConfigurations = map[string]AnthropicModelConfig{
 	},
 }
 
-// ValidateModelName validates that a modelName is one of our supported models
+// ValidateModelName validates that a modelName is one of our supported models.
 func ValidateModelName(modelName string) error {
 	if _, exists := AnthropicModelConfigurations[modelName]; !exists {
 		var validNames []string

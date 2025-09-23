@@ -18,7 +18,7 @@ type OpenAIModelConfig struct {
 }
 
 // ReasoningEffortMap maps uints to strings used for the reasoningEffort parameter.
-// Allows easier migration to new effort levels
+// Allows easier migration to new effort levels.
 var ReasoningEffortMap = map[uint8]shared.ReasoningEffort{
 	1: shared.ReasoningEffortMinimal,
 	2: shared.ReasoningEffortLow,
@@ -26,13 +26,13 @@ var ReasoningEffortMap = map[uint8]shared.ReasoningEffort{
 	4: shared.ReasoningEffortHigh,
 }
 
-// these must correspond to the map above
+// these must correspond to the map above.
 const (
 	MinReasoningEffortInt uint8 = 1
 	MaxReasoningEffortInt uint8 = 4
 )
 
-// GetOpenAIModelConfigs returns a map of OpenAI model names to properties about those models
+// GetOpenAIModelConfigs returns a map of OpenAI model names to properties about those models.
 var OpenAIModelConfigurations = map[string]OpenAIModelConfig{
 	"o3": {
 		Id: "o3",
@@ -92,7 +92,7 @@ var OpenAIModelConfigurations = map[string]OpenAIModelConfig{
 	},
 }
 
-// ValidateModelName validates that a modelName is one of our supported models. If so, it returns the modelId
+// ValidateModelName validates that a modelName is one of our supported models. If so, it returns the modelId.
 func ValidateModelName(modelName string) error {
 	if _, exists := OpenAIModelConfigurations[modelName]; !exists {
 		var validNames []string

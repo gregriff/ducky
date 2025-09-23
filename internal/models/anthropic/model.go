@@ -10,7 +10,7 @@ import (
 	"github.com/gregriff/ducky/internal/models"
 )
 
-// AnthropicModel satisfies the models.LLM interface
+// AnthropicModel satisfies the models.LLM interface.
 type AnthropicModel struct {
 	models.BaseLLM
 	Client             anthropic.Client
@@ -112,7 +112,7 @@ func (llm *AnthropicModel) DoStreamPromptCompletion(content string, enableThinki
 	return nil
 }
 
-// buildMessages takes the provider-agnostic []models.Message of the chat history and returns the Anthropic chat history data format
+// buildMessages takes the provider-agnostic []models.Message of the chat history and returns the Anthropic chat history data format.
 func (llm *AnthropicModel) buildMessages(newContent string) []anthropic.MessageParam {
 	messages := make([]anthropic.MessageParam, 0, len(llm.Messages)+1)
 	var msg models.Message
