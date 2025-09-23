@@ -18,7 +18,9 @@ func main() {
 			fmt.Println("fatal:", err)
 			panic(err)
 		}
-		defer f.Close()
+		defer func() {
+			_ = f.Close()
+		}()
 	}
 	cmd.Execute()
 }

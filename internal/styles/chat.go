@@ -1,7 +1,9 @@
-package tui
+// Package styles contains lipgloss style constants for the text throughout the application, as well as spacing and sizing constants for the text and UI.
+package styles
 
 import "github.com/charmbracelet/lipgloss/v2"
 
+// ChatStylesStruct defines styles for the text in the main viewport of the application (chat history).
 type ChatStylesStruct struct {
 	PromptText lipgloss.Style
 }

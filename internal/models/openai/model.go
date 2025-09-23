@@ -1,30 +1,29 @@
-/*
- * Adds additional fields and implements behavior of OpenAI LLMs
- */
 package openai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/gregriff/ducky/internal/math"
 	"github.com/gregriff/ducky/internal/models"
-	"github.com/gregriff/ducky/internal/utils"
 	openai "github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/packages/param"
 	"github.com/openai/openai-go/v2/responses"
 	"github.com/openai/openai-go/v2/shared"
 )
 
-// OpenAIModel satisfies the models.LLM interface
-type OpenAIModel struct {
+// Model encapsulated an OpenAI model and satisfies the models.LLM interface.
+type Model struct {
 	models.BaseLLM
 	Client       openai.Client
-	ModelConfig  OpenAIModelConfig
+	ModelConfig  ModelConfig
 	SystemPrompt string
 	// TODO: add usage field
 }
 
-func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message) *OpenAIModel {
+// NewModel creates a new OpenAI model to be used for response streaming.
+func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message) *Model {
 	// allow message history to persist when user changes model being used
 	var messages []models.Message
 	if pastMessages != nil {
@@ -33,7 +32,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 		messages = []models.Message{}
 	}
 
-	return &OpenAIModel{
+	return &Model{
 		BaseLLM: models.BaseLLM{
 			SystemPrompt: systemPrompt,
 			MaxTokens:    maxTokens,
@@ -46,7 +45,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 	}
 }
 
-func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning bool, reasoningEffort *uint8, responseChan chan models.StreamChunk) error {
+func (llm *Model) DoStreamPromptCompletion(content string, enableReasoning bool, reasoningEffort *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
@@ -66,12 +65,12 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 		)
 
 		if reasoningEffort != nil {
-			effortNormalized = utils.Clamp(
+			effortNormalized = math.Clamp(
 				int(*reasoningEffort),
-				int(MinReasoningEffortInt),
-				int(MaxReasoningEffortInt),
+				MinReasoningEffortInt,
+				MaxReasoningEffortInt,
 			)
-			effortParam = ReasoningEffortMap[uint8(effortNormalized)]
+			effortParam = ReasoningEffortMap[effortNormalized]
 		} else {
 			// this should never run because viper sets a default effort flag
 			effortParam = shared.ReasoningEffortMinimal
@@ -88,7 +87,7 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 
 	// https://pkg.go.dev/github.com/openai/openai-go/v2/responses#ResponseNewParams
 	stream := llm.Client.Responses.NewStreaming(context.TODO(), responses.ResponseNewParams{
-		Model:           shared.ResponsesModel(llm.ModelConfig.Id),
+		Model:           llm.ModelConfig.ID,
 		Input:           llm.buildMessages(content),
 		Reasoning:       reasoning,
 		Instructions:    param.Opt[string]{Value: llm.SystemPrompt},
@@ -124,11 +123,11 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 	}
 
 	if stream.Err() != nil {
-		return models.StreamError{ErrMsg: stream.Err().Error()}
+		return errors.New(stream.Err().Error())
 	}
 
 	// update state
-	llm.PromptCount += 1
+	llm.PromptCount++
 
 	if len(fullResponseText) > 0 {
 		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: fullResponseText})
@@ -136,8 +135,8 @@ func (llm *OpenAIModel) DoStreamPromptCompletion(content string, enableReasoning
 	return nil
 }
 
-// buildMessages takes the provider-agnostic []models.Message of the chat history and returns the OpenAI chat history data format
-func (llm *OpenAIModel) buildMessages(newContent string) responses.ResponseNewParamsInputUnion {
+// buildMessages takes the provider-agnostic []models.Message of the chat history and returns the OpenAI chat history data format.
+func (llm *Model) buildMessages(newContent string) responses.ResponseNewParamsInputUnion {
 	messages := make([]responses.ResponseInputItemUnionParam, 0, len(llm.Messages)+1)
 	var (
 		currentResponseInputParam  responses.ResponseInputItemUnionParam
@@ -168,25 +167,25 @@ func (llm *OpenAIModel) buildMessages(newContent string) responses.ResponseNewPa
 	return responses.ResponseNewParamsInputUnion{OfInputItemList: messages}
 }
 
-func (llm *OpenAIModel) DoGetCostOfCurrentChat() float64 {
+func (llm *Model) DoGetCostOfCurrentChat() float64 {
 	return -1.
 }
 
-func (llm *OpenAIModel) DoClearChatHistory() {
+func (llm *Model) DoClearChatHistory() {
 	llm.PromptCount = 0
 	llm.Messages = []models.Message{}
 	// TODO: reset usage
 }
 
-func (llm *OpenAIModel) DoGetChatHistory() []models.Message {
+func (llm *Model) DoGetChatHistory() []models.Message {
 	return llm.Messages
 }
 
-func (llm *OpenAIModel) DoGetModelId() string {
-	return llm.ModelConfig.Id
+func (llm *Model) DoGetModelId() string {
+	return llm.ModelConfig.ID
 }
 
-func (llm *OpenAIModel) DoesSupportReasoning() bool {
+func (llm *Model) DoesSupportReasoning() bool {
 	if reasoning := llm.ModelConfig.SupportsReasoning; reasoning != nil && *reasoning {
 		return true
 	}

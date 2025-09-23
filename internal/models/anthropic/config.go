@@ -1,3 +1,4 @@
+// Package anthropic adds additional fields and implements behavior of Anthropic LLMs.
 package anthropic
 
 import (
@@ -7,18 +8,19 @@ import (
 	"github.com/gregriff/ducky/internal/models"
 )
 
-type AnthropicModelConfig struct {
+// ModelConfig specifies fields unique to Anthropic models.
+type ModelConfig struct {
 	models.Pricing
 
 	// official ID from anthropic's API
-	Id       string
+	ID       string
 	Thinking *bool
 }
 
-// A map of Anthropic model names to properties about those models. Not to be modified
-var AnthropicModelConfigurations = map[string]AnthropicModelConfig{
+// AnthropicModelConfigurations is a map of Anthropic model names to properties about those models. Not to be modified.
+var AnthropicModelConfigurations = map[string]ModelConfig{
 	"sonnet": {
-		Id: "claude-sonnet-4-20250514",
+		ID: "claude-sonnet-4-20250514",
 		Pricing: models.Pricing{
 			PromptCost:   3. / 1_000_000,
 			ResponseCost: 15. / 1_000_000,
@@ -26,14 +28,14 @@ var AnthropicModelConfigurations = map[string]AnthropicModelConfig{
 		Thinking: models.BoolPtr(true),
 	},
 	"haiku": {
-		Id: "claude-3-5-haiku-latest",
+		ID: "claude-3-5-haiku-latest",
 		Pricing: models.Pricing{
 			PromptCost:   .8 / 1_000_000,
 			ResponseCost: 4. / 1_000_000,
 		},
 	},
 	"opus": {
-		Id: "claude-opus-4-1-20250805",
+		ID: "claude-opus-4-1-20250805",
 		Pricing: models.Pricing{
 			PromptCost:   15. / 1_000_000,
 			ResponseCost: 75. / 1_000_000,
@@ -42,14 +44,14 @@ var AnthropicModelConfigurations = map[string]AnthropicModelConfig{
 	},
 }
 
-// ValidateModelName validates that a modelName is one of our supported models
+// ValidateModelName validates that a modelName is one of our supported models.
 func ValidateModelName(modelName string) error {
 	if _, exists := AnthropicModelConfigurations[modelName]; !exists {
 		var validNames []string
 		for name := range AnthropicModelConfigurations {
 			validNames = append(validNames, name)
 		}
-		return fmt.Errorf("Valid Anthropic models: %s", strings.Join(validNames, ", "))
+		return fmt.Errorf("valid Anthropic models: %s", strings.Join(validNames, ", "))
 	}
 	return nil
 }

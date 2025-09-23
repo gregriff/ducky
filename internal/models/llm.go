@@ -1,7 +1,7 @@
-// package models contains interfaces and implemetations of language models from multiple providers
+// Package models contains interfaces and implemetations of language models from multiple providers
 package models
 
-// LLM defines fields and behavior of all supported LLMs
+// LLM defines fields and behavior of all supported LLMs.
 type LLM interface {
 	DoStreamPromptCompletion(
 		prompt string,
@@ -17,7 +17,10 @@ type LLM interface {
 }
 
 func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, reasoningEffort *uint8, responseChan chan StreamChunk) error {
-	return llm.DoStreamPromptCompletion(prompt, enableReasoning, reasoningEffort, responseChan)
+	if err := llm.DoStreamPromptCompletion(prompt, enableReasoning, reasoningEffort, responseChan); err != nil {
+		return StreamError{ErrMsg: err.Error()}
+	}
+	return nil
 }
 
 func GetCostOfCurrentChat(llm LLM) float64 {
@@ -40,7 +43,7 @@ func SupportsReasoning(llm LLM) bool {
 	return llm.DoesSupportReasoning()
 }
 
-// BaseLLM defines fields shared by all supported LLMs
+// BaseLLM defines fields shared by all supported LLMs.
 type BaseLLM struct {
 	SystemPrompt string
 	MaxTokens    int
@@ -49,12 +52,13 @@ type BaseLLM struct {
 	PromptCount int
 }
 
+// Message encapsulates a chunk of text data returned from the provider's API when streaming a response.
 type Message struct {
 	Role    string
 	Content string
 }
 
-// Pricing defines costs per input or output token. They should be defined as `(cost per million) / 1,000,000`
+// Pricing defines costs per input or output token. They should be defined as `(cost per million) / 1,000,000`.
 type Pricing struct {
 	PromptCost   float64 // per token
 	ResponseCost float64 // per token
@@ -72,14 +76,16 @@ func Uint8Ptr(i uint8) *uint8 {
 
 // Bubbletea messsages
 
-// StreamChunk is the type of the channel used for communication between the API response handler and bubbletea (its also a bubbletea Msg)
+// StreamChunk is the type of the channel used for communication between the API response handler and bubbletea (its also a bubbletea Msg).
 type StreamChunk struct {
 	Reasoning bool
 	Content   string
 }
 
+// StreamError stores any error that occurred during response streaming.
 type StreamError struct{ ErrMsg string }
 
+// Error return the error message of a StreamError.
 func (e StreamError) Error() string {
 	return e.ErrMsg
 }

@@ -5,6 +5,12 @@ run:
 install:
 	go install
 
+format:
+	golangci-lint fmt
+
+lint:
+	golangci-lint run --fix
+
 
 # Profiling:
 # 1. import these in cmd/run.go: `"net/http"` and `_ "net/http/pprof"`
