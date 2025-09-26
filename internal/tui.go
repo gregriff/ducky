@@ -2,6 +2,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -51,6 +52,9 @@ type Model struct {
 	headerBuilder strings.Builder
 	lastWidth          int
 	forceHeaderRefresh bool
+
+	streamContext context.Context
+	stopStreaming context.CancelFunc
 }
 
 // Bubbletea messages.
@@ -135,6 +139,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch keyString {
 		case "ctrl+d":
 			return m, tea.Quit
+		case "ctrl+c":
+			return m.handleCtrlC()
 		case "esc":
 			return m.handleEscape()
 		case "up", "down":
@@ -160,8 +166,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch keyString {
-		case "ctrl+c":
-			return m.handleCtrlC()
 		case "enter":
 			return m.handleEnter()
 		}
@@ -275,7 +279,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleStreamComplete()
 
 	case models.StreamError:
-		errMsg := fmt.Sprintf("**Error:** %v", msg.ErrMsg)
+		var errMsg string
+
+		// if stream has not been canceled and we indeed have an error
+		if m.streamContext.Err() == nil {
+			errMsg = fmt.Sprintf("**Error:** %v", msg.ErrMsg)
+		} else {
+			// TODO: after 1 cancel, any subsequent error will probably show this message. reset the Context
+			errMsg = ">Stream Cancelled"
+		}
+
 		m.chat.AccumulateStream(errMsg, false, true)
 		return m, m.waitForNextChunk // ensure last chunk is read and let chunk and complete messages handle state
 
@@ -400,8 +413,9 @@ func (m *Model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.viewport.GotoBottom()
 	m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
 
+	m.streamContext, m.stopStreaming = context.WithCancel(context.Background())
 	beginStreaming := func() tea.Msg {
-		return models.StreamPromptCompletion(m.model, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
+		return models.StreamPromptCompletion(m.streamContext, m.model, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
 	}
 
 	return m, tea.Batch(
@@ -414,10 +428,16 @@ func (m *Model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 
 // waitForNextChunk notifies the Update function when a response chunk arrives, and also when the response is completed.
 func (m *Model) waitForNextChunk() tea.Msg {
-	if chunk, ok := <-m.responseChan; ok {
-		return chunk
+	select {
+	case <-m.streamContext.Done():
+		return models.StreamError{ErrMsg: m.streamContext.Err().Error()}
+	case chunk, ok := <-m.responseChan:
+		if ok {
+			return chunk
+		}
+		return streamComplete{}
+
 	}
-	return streamComplete{}
 }
 
 // handleStreamComplete updates TUI state when a LLM response has been fully received.
@@ -475,6 +495,11 @@ func (m *Model) handleEscape() (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleCtrlC() (tea.Model, tea.Cmd) {
+	if m.isStreaming {
+		m.stopStreaming()
+		return m, nil
+	}
+
 	if m.chat.HistoryLen() == 0 {
 		return m, tea.Quit
 	}

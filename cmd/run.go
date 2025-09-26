@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -139,7 +140,7 @@ func runTUI(_ *cobra.Command, _ []string) {
 
 			var streamError error
 			streamFunc := func() {
-				streamError = model.DoStreamPromptCompletion(prompt, reasoning, effortPtr, responseChan)
+				streamError = model.DoStreamPromptCompletion(context.TODO(), prompt, reasoning, effortPtr, responseChan)
 			}
 			go streamFunc()
 

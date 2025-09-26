@@ -40,7 +40,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 	}
 }
 
-func (llm *Model) DoStreamPromptCompletion(content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
+func (llm *Model) DoStreamPromptCompletion(ctx context.Context, content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
@@ -64,7 +64,7 @@ func (llm *Model) DoStreamPromptCompletion(content string, enableThinking bool, 
 		thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
 	}
 
-	stream := llm.Client.Messages.NewStreaming(context.TODO(), anthropic.MessageNewParams{
+	stream := llm.Client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(llm.ModelConfig.ID),
 		System:    llm.SystemPromptObject,
 		MaxTokens: maxTokens,
@@ -78,7 +78,6 @@ func (llm *Model) DoStreamPromptCompletion(content string, enableThinking bool, 
 		event := stream.Current()
 		err := message.Accumulate(event)
 		if err != nil {
-			// TODO: format anthropic error message here
 			return errors.New(stream.Err().Error())
 		}
 
