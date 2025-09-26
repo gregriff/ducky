@@ -151,15 +151,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.triggerScrollback(msg)
 		}
 
-		// TODO: impl cancel response WITH CONTEXTS
-		// if t.isStreaming && msg.String() == "ctrl+c" {
-		// 	t.isStreaming = false
-		// 	t.addToChat(t.currentResponse.String() + "\n\n---\nResponse terminated\n---\n\n")
-		// 	t.updateViewportContent()
-		// 	t.currentResponse.Reset()
-		// 	return r, nil
-		// }
-
 		// while streaming, anything below this will not be accessible
 		if m.isStreaming {
 			break
