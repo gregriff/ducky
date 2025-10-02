@@ -29,6 +29,7 @@ require (
 	github.com/charmbracelet/x/input v0.3.7 // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
+	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
@@ -66,5 +67,7 @@ require (
 
 // custom packages
 replace github.com/muesli/termenv => github.com/gregriff/termenv v0.16.200
+
+replace github.com/mattn/go-runewidth => github.com/mattn/go-runewidth v0.0.18
 
 //replace github.com/muesli/termenv => ../../oss/termenv
