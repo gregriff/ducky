@@ -45,7 +45,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 	}
 }
 
-func (llm *Model) DoStreamPromptCompletion(content string, enableReasoning bool, reasoningEffort *uint8, responseChan chan models.StreamChunk) error {
+func (llm *Model) DoStreamPromptCompletion(ctx context.Context, content string, enableReasoning bool, reasoningEffort *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
@@ -86,7 +86,7 @@ func (llm *Model) DoStreamPromptCompletion(content string, enableReasoning bool,
 	// TODO: add reasoning summary support
 
 	// https://pkg.go.dev/github.com/openai/openai-go/v2/responses#ResponseNewParams
-	stream := llm.Client.Responses.NewStreaming(context.TODO(), responses.ResponseNewParams{
+	stream := llm.Client.Responses.NewStreaming(ctx, responses.ResponseNewParams{
 		Model:           llm.ModelConfig.ID,
 		Input:           llm.buildMessages(content),
 		Reasoning:       reasoning,

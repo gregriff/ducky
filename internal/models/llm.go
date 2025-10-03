@@ -1,9 +1,12 @@
 // Package models contains interfaces and implemetations of language models from multiple providers
 package models
 
+import "context"
+
 // LLM defines fields and behavior of all supported LLMs.
 type LLM interface {
 	DoStreamPromptCompletion(
+		ctx context.Context,
 		prompt string,
 		enableReasoning bool, // whether the user wants the model to think/reason if supported
 		reasoningEffort *uint8, // only to be used for gpt-5 models
@@ -16,8 +19,8 @@ type LLM interface {
 	DoesSupportReasoning() bool
 }
 
-func StreamPromptCompletion(llm LLM, prompt string, enableReasoning bool, reasoningEffort *uint8, responseChan chan StreamChunk) error {
-	if err := llm.DoStreamPromptCompletion(prompt, enableReasoning, reasoningEffort, responseChan); err != nil {
+func StreamPromptCompletion(ctx context.Context, llm LLM, prompt string, enableReasoning bool, reasoningEffort *uint8, responseChan chan StreamChunk) error {
+	if err := llm.DoStreamPromptCompletion(ctx, prompt, enableReasoning, reasoningEffort, responseChan); err != nil {
 		return StreamError{ErrMsg: err.Error()}
 	}
 	return nil

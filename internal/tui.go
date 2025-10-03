@@ -2,6 +2,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -51,6 +52,9 @@ type Model struct {
 	headerBuilder strings.Builder
 	lastWidth          int
 	forceHeaderRefresh bool
+
+	streamContext context.Context
+	stopStreaming context.CancelFunc
 }
 
 // Bubbletea messages.
@@ -135,6 +139,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch keyString {
 		case "ctrl+d":
 			return m, tea.Quit
+		case "ctrl+c":
+			return m.handleCtrlC()
 		case "esc":
 			return m.handleEscape()
 		case "up", "down":
@@ -145,27 +151,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.triggerScrollback(msg)
 		}
 
-		// TODO: impl cancel response WITH CONTEXTS
-		// if t.isStreaming && msg.String() == "ctrl+c" {
-		// 	t.isStreaming = false
-		// 	t.addToChat(t.currentResponse.String() + "\n\n---\nResponse terminated\n---\n\n")
-		// 	t.updateViewportContent()
-		// 	t.currentResponse.Reset()
-		// 	return r, nil
-		// }
-
 		// while streaming, anything below this will not be accessible
 		if m.isStreaming {
 			break
 		}
 
 		switch keyString {
-		case "ctrl+c":
-			return m.handleCtrlC()
 		case "enter":
 			return m.handleEnter()
 		}
-
 	case tea.PasteMsg:
 		if m.isStreaming { // don't allow paste while streaming
 			return m, nil
@@ -179,9 +173,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
 			viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
 
-			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 			m.textarea.SetHeight(newHeight) // this func clamps
-			return m.updateComponents(msg)  // pass the paste msg to the textarea
+			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 		}
 	case tea.MouseMsg:
 		var (
@@ -276,7 +269,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleStreamComplete()
 
 	case models.StreamError:
-		errMsg := fmt.Sprintf("**Error:** %v", msg.ErrMsg)
+		var errMsg string
+
+		// if stream has not been canceled and we indeed have an error
+		if m.streamContext.Err() == nil {
+			errMsg = fmt.Sprintf("**Error:** %v", msg.ErrMsg)
+		} else {
+			// TODO: after 1 cancel, any subsequent error will probably show this message. reset the Context
+			errMsg = ">Stream Cancelled"
+		}
+
 		m.chat.AccumulateStream(errMsg, false, true)
 		return m, m.waitForNextChunk // ensure last chunk is read and let chunk and complete messages handle state
 
@@ -311,22 +313,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateComponents sends a Msg and []Cmd to the viewport and textarea to update their state and returns a Batch of all commands.
-// Use this in the Update function when both components need to be updated.
-func (m *Model) updateComponents(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// TODO: can we just move this into the resizeComponents func?
-	var taCmd, vpCmd tea.Cmd
-	m.viewport, vpCmd = m.viewport.Update(msg)
-	m.textarea, taCmd = m.textarea.Update(msg)
-	return m, tea.Batch(taCmd, vpCmd)
-}
-
 // redraw initiates the Window resize handler. Use it after changing the dimensions of a component to make the others update.
 func (m *Model) redraw() tea.Msg {
 	return m.windowSize
 }
 
-// resizeComponents sets properties on the viewport and textarea to resize them on their next Update().
+// resizeComponents sets size properties on the viewport and textarea
 func (m *Model) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
 	m.viewport.SetWidth(windowWidth)
 	m.viewport.SetHeight(viewportHeight)
@@ -359,6 +351,7 @@ func (m *Model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	windowHeight, windowWidth := msg.Height, msg.Width
 	viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, nil)
 
+	var taCmd, vpCmd tea.Cmd
 	// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 	if !m.ready {
 		m.viewport = viewport.New(viewport.WithWidth(windowWidth), (viewport.WithHeight(viewportHeight)))
@@ -369,11 +362,17 @@ func (m *Model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.textarea.SetWidth(textAreaWidth)
 		m.textarea.MaxHeight = viewportHeight / 2
 		m.ready = true
+
+		m.viewport, vpCmd = m.viewport.Update(msg)
+		m.textarea, taCmd = m.textarea.Update(msg)
+		return m, tea.Batch(taCmd, vpCmd)
 	} else {
 		m.textarea.MaxHeight = viewportHeight / 2
 		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
+		m.viewport, vpCmd = m.viewport.Update(msg)
+		m.textarea, taCmd = m.textarea.Update(msg)
+		return m, tea.Batch(taCmd, vpCmd)
 	}
-	return m.updateComponents(msg)
 }
 
 // getNumLines returns the number of lines the text in the textarea takes up (soft-wrapped).
@@ -401,8 +400,9 @@ func (m *Model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.viewport.GotoBottom()
 	m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
 
+	m.streamContext, m.stopStreaming = context.WithCancel(context.Background())
 	beginStreaming := func() tea.Msg {
-		return models.StreamPromptCompletion(m.model, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
+		return models.StreamPromptCompletion(m.streamContext, m.model, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
 	}
 
 	return m, tea.Batch(
@@ -415,10 +415,16 @@ func (m *Model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 
 // waitForNextChunk notifies the Update function when a response chunk arrives, and also when the response is completed.
 func (m *Model) waitForNextChunk() tea.Msg {
-	if chunk, ok := <-m.responseChan; ok {
-		return chunk
+	select {
+	case <-m.streamContext.Done():
+		return models.StreamError{ErrMsg: m.streamContext.Err().Error()}
+	case chunk, ok := <-m.responseChan:
+		if ok {
+			return chunk
+		}
+		return streamComplete{}
+
 	}
-	return streamComplete{}
 }
 
 // handleStreamComplete updates TUI state when a LLM response has been fully received.
@@ -430,8 +436,7 @@ func (m *Model) handleStreamComplete() (tea.Model, tea.Cmd) {
 	m.isStreaming = false
 	m.isReasoning = false
 	m.forceHeaderRefresh = true
-	// TODO: use chroma lexer to apply correct syntax highlighting to full response
-	// lexer := lexers.Analyse("package main\n\nfunc main()\n{\n}\n")
+
 	m.chat.AddResponse()
 	curLineCount := m.viewport.TotalLineCount()
 
@@ -477,6 +482,11 @@ func (m *Model) handleEscape() (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleCtrlC() (tea.Model, tea.Cmd) {
+	if m.isStreaming {
+		m.stopStreaming()
+		return m, nil
+	}
+
 	if m.chat.HistoryLen() == 0 {
 		return m, tea.Quit
 	}
@@ -565,9 +575,8 @@ func (m *Model) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
 		windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
 		viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
 
-		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 		m.textarea.SetHeight(newHeight)
-		return m.updateComponents(msg)
+		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 	}
 
 	// This runs when the textarea is focused and not being resized.
