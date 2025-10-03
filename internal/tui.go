@@ -160,7 +160,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m.handleEnter()
 		}
-
 	case tea.PasteMsg:
 		if m.isStreaming { // don't allow paste while streaming
 			return m, nil
@@ -174,8 +173,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
 			viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
 
-			m.textarea.SetHeight(newHeight)                                            // this func clamps
-			return m.resizeComponents(msg, windowWidth, textAreaWidth, viewportHeight) // pass the paste msg to the textarea
+			m.textarea.SetHeight(newHeight) // this func clamps
+			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 		}
 	case tea.MouseMsg:
 		var (
@@ -319,10 +318,8 @@ func (m *Model) redraw() tea.Msg {
 	return m.windowSize
 }
 
-// resizeComponents sets size properties on the viewport and textarea and returns the commands needed to update their UI.
-func (m *Model) resizeComponents(msg tea.Msg, windowWidth, textAreaWidth, viewportHeight int) (tea.Model, tea.Cmd) {
-	var taCmd, vpCmd tea.Cmd
-
+// resizeComponents sets size properties on the viewport and textarea
+func (m *Model) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
 	m.viewport.SetWidth(windowWidth)
 	m.viewport.SetHeight(viewportHeight)
 
@@ -330,10 +327,6 @@ func (m *Model) resizeComponents(msg tea.Msg, windowWidth, textAreaWidth, viewpo
 	m.textarea.SetWidth(textAreaWidth)
 
 	m.viewport.SetContent(m.chat.Render(windowWidth))
-
-	m.viewport, vpCmd = m.viewport.Update(msg)
-	m.textarea, taCmd = m.textarea.Update(msg)
-	return m, tea.Batch(taCmd, vpCmd)
 }
 
 // getResizeParams returns size dimensions of on-screen components needed during redrawing or resizing.
@@ -358,6 +351,7 @@ func (m *Model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	windowHeight, windowWidth := msg.Height, msg.Width
 	viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, nil)
 
+	var taCmd, vpCmd tea.Cmd
 	// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 	if !m.ready {
 		m.viewport = viewport.New(viewport.WithWidth(windowWidth), (viewport.WithHeight(viewportHeight)))
@@ -369,13 +363,15 @@ func (m *Model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.textarea.MaxHeight = viewportHeight / 2
 		m.ready = true
 
-		var taCmd, vpCmd tea.Cmd
 		m.viewport, vpCmd = m.viewport.Update(msg)
 		m.textarea, taCmd = m.textarea.Update(msg)
 		return m, tea.Batch(taCmd, vpCmd)
 	} else {
 		m.textarea.MaxHeight = viewportHeight / 2
-		return m.resizeComponents(msg, windowWidth, textAreaWidth, viewportHeight)
+		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
+		m.viewport, vpCmd = m.viewport.Update(msg)
+		m.textarea, taCmd = m.textarea.Update(msg)
+		return m, tea.Batch(taCmd, vpCmd)
 	}
 }
 
@@ -580,7 +576,7 @@ func (m *Model) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
 		viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
 
 		m.textarea.SetHeight(newHeight)
-		return m.resizeComponents(msg, windowWidth, textAreaWidth, viewportHeight)
+		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 	}
 
 	// This runs when the textarea is focused and not being resized.
