@@ -64,6 +64,9 @@ func (c *Model) AccumulateStream(chunk string, isReasoning, isError bool) {
 		return
 	}
 
+	// TODO: test for 3 consecutive ``` to see if that ever does not happen, to see if we can
+	// break rendering into smaller chunks with code blocks as delimiters
+
 	if isReasoning {
 		c.stream.reasoning.WriteString(chunk)
 	} else {

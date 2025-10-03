@@ -32,23 +32,27 @@ func InitConfig(file string) {
 		viper.SetConfigFile(file)
 	}
 
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// create config file from embedded default file
-			if err := viper.ReadConfig(bytes.NewBuffer(defaultConfigFile)); err != nil {
-				fmt.Printf("Error reading default config file at path: %s", defaultConfigFile)
-				os.Exit(1)
-			}
-			configPath := filepath.Join(getConfigDir(), "ducky.toml")
-			if err := os.WriteFile(configPath, defaultConfigFile, 0o600); err != nil {
-				fmt.Printf("Error writing default config: %v", err)
-				os.Exit(1)
-			}
-		} else {
-			fmt.Println("Error reading config file: ", err)
+	var configErr error
+	if configErr = viper.ReadInConfig(); configErr == nil {
+		return
+	}
+
+	if _, ok := configErr.(viper.ConfigFileNotFoundError); ok {
+		// create config file from embedded default file
+		if err := viper.ReadConfig(bytes.NewBuffer(defaultConfigFile)); err != nil {
+			fmt.Printf("Error reading default config file at path: %s", defaultConfigFile)
 			os.Exit(1)
 		}
+		configPath := filepath.Join(getConfigDir(), "ducky.toml")
+		if err := os.WriteFile(configPath, defaultConfigFile, 0o600); err != nil {
+			fmt.Printf("Error writing default config: %v", err)
+			os.Exit(1)
+		}
+	} else {
+		fmt.Println("Error reading config file: ", configErr)
+		os.Exit(1)
 	}
+
 }
 
 func getConfigDir() string {
