@@ -54,3 +54,4 @@ go.work
 *.tmp
 *.temp
 PROMPTS.md
+SQL_BUG.txt
