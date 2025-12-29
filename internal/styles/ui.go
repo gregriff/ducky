@@ -1,6 +1,6 @@
 package styles
 
-import "github.com/charmbracelet/lipgloss/v2"
+import "charm.land/lipgloss/v2"
 
 // TUIStylesStruct defines style constants for the UI of the application.
 type TUIStylesStruct struct {

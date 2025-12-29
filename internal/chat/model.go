@@ -3,7 +3,7 @@ package chat
 import (
 	"bytes"
 
-	"github.com/charmbracelet/lipgloss/v2"
+	"charm.land/lipgloss/v2"
 	styles "github.com/gregriff/ducky/internal/styles"
 )
 

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/v2/spinner"
-	"github.com/charmbracelet/bubbles/v2/textarea"
-	"github.com/charmbracelet/bubbles/v2/viewport"
-	tea "github.com/charmbracelet/bubbletea/v2"
-	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/gregriff/ducky/internal/chat"
 	"github.com/gregriff/ducky/internal/math"
 	"github.com/gregriff/ducky/internal/models"
@@ -70,8 +70,14 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoni
 	ta.ShowLineNumbers = false
 	ta.KeyMap.InsertNewline.SetEnabled(false) // TODO: need this to be bound to shift+enter
 	ta.Placeholder = "Send a prompt..."
-	ta.Styles.Focused.Placeholder = styles.TUIStyles.PromptText
-	ta.Styles.Focused.CursorLine = styles.TUIStyles.TextAreaCursor
+
+	// ta.Styles.Focused.Placeholder = styles.TUIStyles.PromptText
+	// ta.Styles.Focused.CursorLine = styles.TUIStyles.TextAreaCursor
+	taS := ta.Styles()
+	taS.Focused.Placeholder = styles.TUIStyles.PromptText
+	taS.Focused.CursorLine = styles.TUIStyles.TextAreaCursor
+	ta.SetStyles(taS)
+
 	ta.Prompt = "┃ "
 	ta.CharLimit = 100_000
 	ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
@@ -99,11 +105,7 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoni
 
 // Start begins the TUI application.
 func (m *Model) Start(initialPrompt string) {
-	p := tea.NewProgram(m,
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-		tea.WithReportFocus(),
-	)
+	p := tea.NewProgram(m)
 	m.initialPrompt = initialPrompt
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v", err)
@@ -112,10 +114,7 @@ func (m *Model) Start(initialPrompt string) {
 
 // Init performs initial IO.
 func (m *Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{
-		tea.SetWindowTitle("ducky"),
-		m.textarea.Focus(),
-	}
+	cmds := []tea.Cmd{m.textarea.Focus()}
 
 	if len(m.initialPrompt) > 0 {
 		cmds = append(cmds, func() tea.Msg {
@@ -449,7 +448,7 @@ func (m *Model) handleStreamComplete() (tea.Model, tea.Cmd) {
 		// user has scrolled up during streaming. since we are now prepending the entire chat history before the latest response,
 		// we need to set the Y offset so that their scroll position is the same as it was while streaming
 		// TODO: may need to do this regardless
-		yOffset := m.viewport.YOffset
+		yOffset := m.viewport.YOffset()
 		newLineCount := m.viewport.TotalLineCount()
 		m.viewport.SetYOffset(newLineCount - curLineCount + yOffset)
 	}
@@ -612,10 +611,18 @@ func (m *Model) triggerScrollback(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the TUI into a string.
-func (m *Model) View() string {
+func (m *Model) View() tea.View {
+	var v tea.View
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	v.ReportFocus = true
+	v.WindowTitle = "ducky"
+
 	if !m.ready {
-		return "Initializing..."
+		v.SetContent("Initializing...")
+		return v
 	}
+
 	m.contentBuilder.Reset()
 	m.contentBuilder.WriteString(
 		zone.Scan(
@@ -625,7 +632,8 @@ func (m *Model) View() string {
 				zone.Mark("promptInput", styles.VP_TA_SPACING+m.textarea.View()),
 			),
 		))
-	return m.contentBuilder.String()
+	v.SetContent(m.contentBuilder.String())
+	return v
 }
 
 // headerView returns the formatted header, reusing the last computed headerView result if the width hasn't changed and the spinner doesn't
