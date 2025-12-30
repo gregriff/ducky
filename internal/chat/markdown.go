@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/charmbracelet/glamour"
+	"charm.land/glamour/v2"
 )
 
 // MarkdownRenderer wraps glamour.TermRenderer and handles Markdown rendering
