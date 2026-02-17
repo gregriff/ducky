@@ -1,5 +1,3 @@
-GOEXPERIMENT=greenteagc
-
 run:
 	DEBUG=1 go run . run haiku
 
