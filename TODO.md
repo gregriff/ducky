@@ -1,6 +1,7 @@
 ## TODO List
 
 #### High Priority
+- sql from SQL_BUG.txt, if pasted into prompt, freezes entire program
 
 #### 100 Go Mistakes Lessons:
 - use variadic options to init TUIModel from CLI args

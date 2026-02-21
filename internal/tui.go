@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/v2/spinner"
-	"github.com/charmbracelet/bubbles/v2/textarea"
-	"github.com/charmbracelet/bubbles/v2/viewport"
-	tea "github.com/charmbracelet/bubbletea/v2"
-	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/gregriff/ducky/internal/chat"
 	"github.com/gregriff/ducky/internal/math"
 	"github.com/gregriff/ducky/internal/models"
@@ -22,10 +22,10 @@ import (
 	"github.com/muesli/reflow/wordwrap"
 )
 
-// Model defines the TUI application state.
-type Model struct {
+// model defines the TUI application state.
+type model struct {
 	// user args TODO: combine these into a PromptContext struct (and add a context._), along with isStreaming + isReasoning?
-	model           models.LLM
+	llm             models.LLM
 	systemPrompt    string
 	maxTokens       int
 	enableReasoning bool
@@ -64,14 +64,20 @@ type (
 )
 
 // NewTUI creates the TUI application with default state.
-func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoningEffort *uint8, maxTokens int, glamourStyle string) *Model {
+func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoningEffort *uint8, maxTokens int, glamourStyle string) *model {
 	// create and style textarea
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
 	ta.KeyMap.InsertNewline.SetEnabled(false) // TODO: need this to be bound to shift+enter
 	ta.Placeholder = "Send a prompt..."
-	ta.Styles.Focused.Placeholder = styles.TUIStyles.PromptText
-	ta.Styles.Focused.CursorLine = styles.TUIStyles.TextAreaCursor
+
+	// ta.Styles.Focused.Placeholder = styles.TUIStyles.PromptText
+	// ta.Styles.Focused.CursorLine = styles.TUIStyles.TextAreaCursor
+	taS := ta.Styles()
+	taS.Focused.Placeholder = styles.TUIStyles.PromptText
+	taS.Focused.CursorLine = styles.TUIStyles.TextAreaCursor
+	ta.SetStyles(taS)
+
 	ta.Prompt = "┃ "
 	ta.CharLimit = 100_000
 	ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
@@ -80,7 +86,7 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoni
 	s.Spinner = spinner.Points
 	s.Style = styles.TUIStyles.Spinner
 
-	t := &Model{
+	t := &model{
 		systemPrompt:    systemPrompt,
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
@@ -93,17 +99,13 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoni
 		responseChan: make(chan models.StreamChunk),
 	}
 
-	t.model = InitLLMClient(modelName, systemPrompt, maxTokens)
+	t.llm = InitLLMClient(modelName, systemPrompt, maxTokens)
 	return t
 }
 
 // Start begins the TUI application.
-func (m *Model) Start(initialPrompt string) {
-	p := tea.NewProgram(m,
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-		tea.WithReportFocus(),
-	)
+func (m *model) Start(initialPrompt string) {
+	p := tea.NewProgram(m)
 	m.initialPrompt = initialPrompt
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v", err)
@@ -111,11 +113,8 @@ func (m *Model) Start(initialPrompt string) {
 }
 
 // Init performs initial IO.
-func (m *Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{
-		tea.SetWindowTitle("ducky"),
-		m.textarea.Focus(),
-	}
+func (m *model) Init() tea.Cmd {
+	cmds := []tea.Cmd{m.textarea.Focus()}
 
 	if len(m.initialPrompt) > 0 {
 		cmds = append(cmds, func() tea.Msg {
@@ -126,7 +125,7 @@ func (m *Model) Init() tea.Cmd {
 }
 
 // Update updates the TUI UI.
-func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var spCmd,
 		vpCmd tea.Cmd
 
@@ -314,12 +313,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // redraw initiates the Window resize handler. Use it after changing the dimensions of a component to make the others update.
-func (m *Model) redraw() tea.Msg {
+func (m *model) redraw() tea.Msg {
 	return m.windowSize
 }
 
 // resizeComponents sets size properties on the viewport and textarea
-func (m *Model) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
+func (m *model) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
 	m.viewport.SetWidth(windowWidth)
 	m.viewport.SetHeight(viewportHeight)
 
@@ -330,7 +329,7 @@ func (m *Model) resizeComponents(windowWidth, textAreaWidth, viewportHeight int)
 }
 
 // getResizeParams returns size dimensions of on-screen components needed during redrawing or resizing.
-func (m *Model) getResizeParams(windowHeight, windowWidth int, taHeight *int) (viewportHeight int, textAreaWidth int) {
+func (m *model) getResizeParams(windowHeight, windowWidth int, taHeight *int) (viewportHeight int, textAreaWidth int) {
 	var textAreaHeight int
 	if taHeight != nil {
 		textAreaHeight = *taHeight
@@ -346,7 +345,7 @@ func (m *Model) getResizeParams(windowHeight, windowWidth int, taHeight *int) (v
 	return viewportHeight, textAreaWidth
 }
 
-func (m *Model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.windowSize = msg
 	windowHeight, windowWidth := msg.Height, msg.Width
 	viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, nil)
@@ -377,17 +376,17 @@ func (m *Model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 
 // getNumLines returns the number of lines the text in the textarea takes up (soft-wrapped).
 // takes into account lines of text not visible on screen (scrolled out of view).
-func (m *Model) getNumLines(text string) int {
+func (m *model) getNumLines(text string) int {
 	wrapped := wordwrap.String(text, m.textarea.MaxWidth)
 	lines := strings.Split(wrapped, "\n")
 	return len(lines)
 }
 
 // promptLLM makes the LLM API request, handles TUI state and begins listening for the response stream.
-func (m *Model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
+func (m *model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.responseChan = make(chan models.StreamChunk)
 	m.isStreaming = true
-	if m.enableReasoning && m.model.DoesSupportReasoning() {
+	if m.enableReasoning && m.llm.DoesSupportReasoning() {
 		m.isReasoning = true
 	}
 
@@ -402,7 +401,7 @@ func (m *Model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 
 	m.streamContext, m.stopStreaming = context.WithCancel(context.Background())
 	beginStreaming := func() tea.Msg {
-		return models.StreamPromptCompletion(m.streamContext, m.model, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
+		return models.StreamPromptCompletion(m.streamContext, m.llm, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
 	}
 
 	return m, tea.Batch(
@@ -414,7 +413,7 @@ func (m *Model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 }
 
 // waitForNextChunk notifies the Update function when a response chunk arrives, and also when the response is completed.
-func (m *Model) waitForNextChunk() tea.Msg {
+func (m *model) waitForNextChunk() tea.Msg {
 	select {
 	case <-m.streamContext.Done():
 		return models.StreamError{ErrMsg: m.streamContext.Err().Error()}
@@ -428,7 +427,7 @@ func (m *Model) waitForNextChunk() tea.Msg {
 }
 
 // handleStreamComplete updates TUI state when a LLM response has been fully received.
-func (m *Model) handleStreamComplete() (tea.Model, tea.Cmd) {
+func (m *model) handleStreamComplete() (tea.Model, tea.Cmd) {
 	// if a StreamError occurs before response streaming begins, two waitForNextChunks will return streamComplete
 	if !m.isStreaming {
 		return m, nil
@@ -449,7 +448,7 @@ func (m *Model) handleStreamComplete() (tea.Model, tea.Cmd) {
 		// user has scrolled up during streaming. since we are now prepending the entire chat history before the latest response,
 		// we need to set the Y offset so that their scroll position is the same as it was while streaming
 		// TODO: may need to do this regardless
-		yOffset := m.viewport.YOffset
+		yOffset := m.viewport.YOffset()
 		newLineCount := m.viewport.TotalLineCount()
 		m.viewport.SetYOffset(newLineCount - curLineCount + yOffset)
 	}
@@ -463,7 +462,7 @@ func (m *Model) handleStreamComplete() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) handleEscape() (tea.Model, tea.Cmd) {
+func (m *model) handleEscape() (tea.Model, tea.Cmd) {
 	// m.viewport.GotoBottom()
 	// m.lastManualGoToBottom = time.Now()
 	if m.textarea.Focused() {
@@ -481,7 +480,7 @@ func (m *Model) handleEscape() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) handleCtrlC() (tea.Model, tea.Cmd) {
+func (m *model) handleCtrlC() (tea.Model, tea.Cmd) {
 	if m.isStreaming {
 		m.stopStreaming()
 		return m, nil
@@ -491,7 +490,8 @@ func (m *Model) handleCtrlC() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	m.chat.Clear() // print something
-	m.model.DoClearChatHistory()
+	m.llm.DoClearChatHistory()
+	m.forceHeaderRefresh = true
 	m.chat.Scrollback.Reset()
 	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 	if !m.textarea.Focused() {
@@ -500,7 +500,7 @@ func (m *Model) handleCtrlC() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
+func (m *model) handleEnter() (tea.Model, tea.Cmd) {
 	input := strings.TrimSpace(m.textarea.Value())
 	m.textarea.Reset()
 	m.chat.Scrollback.Reset()
@@ -514,7 +514,7 @@ func (m *Model) handleEnter() (tea.Model, tea.Cmd) {
 }
 
 // allowScrollback checks the cursor position in the textarea and returns whether triggering a scrollback action can take place.
-func (m *Model) allowScrollback(keyString string) bool {
+func (m *model) allowScrollback(keyString string) bool {
 	realLineCount := m.textarea.LineCount() // # of lines given infinite screen width
 	lineNo := m.textarea.Line() + 1         // starts at zero
 
@@ -550,7 +550,7 @@ func (m *Model) allowScrollback(keyString string) bool {
 }
 
 // updateTextarea sends any message to the textarea. It also handles resizing the textarea if the text changes.
-func (m *Model) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg == nil {
 		return m, nil
 	}
@@ -587,7 +587,7 @@ func (m *Model) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // triggerScrollback makes the textarea go forward or backward in history to display a different prompt.
-func (m *Model) triggerScrollback(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *model) triggerScrollback(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var (
 		retrievedPrompt string
 		exists          bool
@@ -612,10 +612,18 @@ func (m *Model) triggerScrollback(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the TUI into a string.
-func (m *Model) View() string {
+func (m *model) View() tea.View {
+	var v tea.View
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	v.ReportFocus = true
+	v.WindowTitle = "ducky"
+
 	if !m.ready {
-		return "Initializing..."
+		v.SetContent("Initializing...")
+		return v
 	}
+
 	m.contentBuilder.Reset()
 	m.contentBuilder.WriteString(
 		zone.Scan(
@@ -625,12 +633,13 @@ func (m *Model) View() string {
 				zone.Mark("promptInput", styles.VP_TA_SPACING+m.textarea.View()),
 			),
 		))
-	return m.contentBuilder.String()
+	v.SetContent(m.contentBuilder.String())
+	return v
 }
 
 // headerView returns the formatted header, reusing the last computed headerView result if the width hasn't changed and the spinner doesn't
 // need to be updated.
-func (m *Model) headerView(width int) string {
+func (m *model) headerView(width int) string {
 	var leftText string
 	if !m.isStreaming {
 		if width == m.lastWidth && !m.forceHeaderRefresh {
@@ -647,7 +656,10 @@ func (m *Model) headerView(width int) string {
 		m.forceHeaderRefresh = false
 	}
 
-	rightText := models.GetModelId(m.model)
+	rightText := models.GetModelId(m.llm)
+	if cost := models.GetCostOfCurrentChat(m.llm); cost != "" {
+		rightText += " (" + cost + ")"
+	}
 	titleTextWidth := lipgloss.Width(leftText) +
 		lipgloss.Width(rightText) +
 		styles.H_PADDING*2 + // the left and right padding defined in TUIStyles.TitleBar

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gregriff/ducky/internal/models"
-	"github.com/openai/openai-go/v2/shared"
+	"github.com/openai/openai-go/v3/shared"
 )
 
 // ModelConfig specifies fields unique to OpenAI models.

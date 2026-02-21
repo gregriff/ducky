@@ -7,10 +7,10 @@ import (
 
 	"github.com/gregriff/ducky/internal/math"
 	"github.com/gregriff/ducky/internal/models"
-	openai "github.com/openai/openai-go/v2"
-	"github.com/openai/openai-go/v2/packages/param"
-	"github.com/openai/openai-go/v2/responses"
-	"github.com/openai/openai-go/v2/shared"
+	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/packages/param"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 )
 
 // Model encapsulated an OpenAI model and satisfies the models.LLM interface.
@@ -168,7 +168,7 @@ func (llm *Model) buildMessages(newContent string) responses.ResponseNewParamsIn
 }
 
 func (llm *Model) DoGetCostOfCurrentChat() float64 {
-	return -1.
+	return 0
 }
 
 func (llm *Model) DoClearChatHistory() {

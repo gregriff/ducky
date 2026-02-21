@@ -15,6 +15,11 @@ type Model struct {
 	ModelConfig        ModelConfig
 	SystemPromptObject []anthropic.TextBlockParam
 	// TODO: add usage field
+
+	// price in dollars. getter should fmt it to cents if small enough. should
+	// be updated after each response stream completes, using current model's pricing.
+	// should be reset on clear
+	totalCost float64
 }
 
 // NewModel creates a new Anthropic Model to be used for response streaming.
@@ -74,6 +79,7 @@ func (llm *Model) DoStreamPromptCompletion(ctx context.Context, content string, 
 
 	message := anthropic.Message{}
 	message.Content = make([]anthropic.ContentBlockUnion, maxTokens/4) // preallocate cuz why not
+	inputTokens, outputTokens := 0., 0.
 	for stream.Next() {
 		event := stream.Current()
 		err := message.Accumulate(event)
@@ -94,12 +100,19 @@ func (llm *Model) DoStreamPromptCompletion(ctx context.Context, content string, 
 				fullResponseText += deltaVariant.Citation.CitedText
 				responseChan <- models.StreamChunk{Reasoning: false, Content: deltaVariant.Citation.CitedText}
 			}
+		case anthropic.MessageDeltaEvent:
+			inputTokens += float64(eventVariant.Usage.InputTokens)
+			outputTokens += float64(eventVariant.Usage.OutputTokens)
 		}
 	}
 
 	if stream.Err() != nil {
 		return errors.New(stream.Err().Error())
 	}
+
+	inputCost := llm.ModelConfig.PromptCost * inputTokens
+	outputCost := llm.ModelConfig.ResponseCost * outputTokens
+	llm.totalCost += inputCost + outputCost
 
 	// update state
 	llm.PromptCount++
@@ -131,11 +144,13 @@ func (llm *Model) buildMessages(newContent string) []anthropic.MessageParam {
 	return messages
 }
 
+// given a cost in dollars, return a formatted string to be printed to screen
 func (llm *Model) DoGetCostOfCurrentChat() float64 {
-	return -1.
+	return llm.totalCost
 }
 
 func (llm *Model) DoClearChatHistory() {
+	llm.totalCost = 0
 	llm.PromptCount = 0
 	llm.Messages = []models.Message{}
 	// TODO: reset usage

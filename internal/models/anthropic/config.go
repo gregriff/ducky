@@ -20,7 +20,7 @@ type ModelConfig struct {
 // AnthropicModelConfigurations is a map of Anthropic model names to properties about those models. Not to be modified.
 var AnthropicModelConfigurations = map[string]ModelConfig{
 	"sonnet": {
-		ID: "claude-sonnet-4-5-20250929",
+		ID: "claude-sonnet-4-6",
 		Pricing: models.Pricing{
 			PromptCost:   3. / 1_000_000,
 			ResponseCost: 15. / 1_000_000,
@@ -28,17 +28,17 @@ var AnthropicModelConfigurations = map[string]ModelConfig{
 		Thinking: models.BoolPtr(true),
 	},
 	"haiku": {
-		ID: "claude-3-5-haiku-latest",
+		ID: "claude-haiku-4-5",
 		Pricing: models.Pricing{
-			PromptCost:   .8 / 1_000_000,
-			ResponseCost: 4. / 1_000_000,
+			PromptCost:   1. / 1_000_000,
+			ResponseCost: 5. / 1_000_000,
 		},
 	},
 	"opus": {
-		ID: "claude-opus-4-1-20250805",
+		ID: "claude-opus-4-6",
 		Pricing: models.Pricing{
-			PromptCost:   15. / 1_000_000,
-			ResponseCost: 75. / 1_000_000,
+			PromptCost:   5. / 1_000_000,
+			ResponseCost: 25. / 1_000_000,
 		},
 		Thinking: models.BoolPtr(true),
 	},
