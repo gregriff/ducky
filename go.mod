@@ -7,11 +7,11 @@ require (
 	charm.land/bubbletea/v2 v2.0.0-rc.2
 	charm.land/glamour/v2 v2.0.0-20251110203732-69649f93d3b1
 	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251114164805-d267651963ad
-	github.com/anthropics/anthropic-sdk-go v1.19.0
+	github.com/anthropics/anthropic-sdk-go v1.26.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/lrstanley/bubblezone/v2 v2.0.0-alpha.3
 	github.com/muesli/reflow v0.3.0
-	github.com/openai/openai-go/v3 v3.15.0
+	github.com/openai/openai-go/v3 v3.22.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	golang.org/x/term v0.32.0

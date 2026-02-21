@@ -168,7 +168,7 @@ func (llm *Model) buildMessages(newContent string) responses.ResponseNewParamsIn
 }
 
 func (llm *Model) DoGetCostOfCurrentChat() float64 {
-	return -1.
+	return 0
 }
 
 func (llm *Model) DoClearChatHistory() {

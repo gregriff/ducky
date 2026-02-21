@@ -1,7 +1,10 @@
 // Package models contains interfaces and implemetations of language models from multiple providers
 package models
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // LLM defines fields and behavior of all supported LLMs.
 type LLM interface {
@@ -26,8 +29,20 @@ func StreamPromptCompletion(ctx context.Context, llm LLM, prompt string, enableR
 	return nil
 }
 
-func GetCostOfCurrentChat(llm LLM) float64 {
-	return llm.DoGetCostOfCurrentChat()
+// GetCostOfCurrentChat returns a formatted string of the chat's current cost
+func GetCostOfCurrentChat(llm LLM) string {
+	cost := llm.DoGetCostOfCurrentChat()
+	if cost == 0 {
+		return ""
+	}
+	if cost >= 1. { // todo: could color red
+		return fmt.Sprintf("$%.2f", cost)
+	}
+	if cost < 0.0005 {
+		return "less than \u2152 \u00a2"
+	}
+	cents := cost * 100
+	return fmt.Sprintf("%.1f\u00a2", cents)
 }
 
 func ClearChatHistory(llm LLM) {

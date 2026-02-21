@@ -491,6 +491,7 @@ func (m *model) handleCtrlC() (tea.Model, tea.Cmd) {
 	}
 	m.chat.Clear() // print something
 	m.llm.DoClearChatHistory()
+	m.forceHeaderRefresh = true
 	m.chat.Scrollback.Reset()
 	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 	if !m.textarea.Focused() {
@@ -656,6 +657,9 @@ func (m *model) headerView(width int) string {
 	}
 
 	rightText := models.GetModelId(m.llm)
+	if cost := models.GetCostOfCurrentChat(m.llm); cost != "" {
+		rightText += " (" + cost + ")"
+	}
 	titleTextWidth := lipgloss.Width(leftText) +
 		lipgloss.Width(rightText) +
 		styles.H_PADDING*2 + // the left and right padding defined in TUIStyles.TitleBar
