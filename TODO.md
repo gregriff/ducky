@@ -1,7 +1,9 @@
 ## TODO List
 
 #### High Priority
+- enable pprof at all times. profile sluggishness after many prompts, textarea not responsive and eats 90MB and 12% CPU
 - sql from SQL_BUG.txt, if pasted into prompt, freezes entire program
+- look into sonnet 4-6 config to lower costs, it seems to be doing multi-shot on its own for complex programming prompts
 
 #### 100 Go Mistakes Lessons:
 - use variadic options to init TUIModel from CLI args
@@ -10,6 +12,9 @@
 - cursor should be placed at end of line when placeholder shows up, and should blink/focus on application start
 - textarea is not foused on startup on tmux
 - scrollback history is not preserved after clearing history. Fix this by adding an `entireHistory` field to chat.Model, where `history` is initially this same slice, but after a CLEAR HISTORY, it becomes a re-slice of `entireHistory`. only the scrollback functionality should use `entireHistory`. refer to book page 67 when implementing this
+
+#### Refactors:
+- rethink LLM interface design, middle layer not needed?
 
 #### UI:
 - only show cost when holding settings key

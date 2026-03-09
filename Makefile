@@ -8,6 +8,7 @@ format:
 	golangci-lint fmt
 
 lint:
+	go vet ./...
 	golangci-lint run --fix
 
 

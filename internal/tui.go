@@ -317,7 +317,7 @@ func (m *model) redraw() tea.Msg {
 	return m.windowSize
 }
 
-// resizeComponents sets size properties on the viewport and textarea
+// resizeComponents sets size properties on the viewport and textarea.
 func (m *model) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
 	m.viewport.SetWidth(windowWidth)
 	m.viewport.SetHeight(viewportHeight)
@@ -365,13 +365,13 @@ func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.viewport, vpCmd = m.viewport.Update(msg)
 		m.textarea, taCmd = m.textarea.Update(msg)
 		return m, tea.Batch(taCmd, vpCmd)
-	} else {
-		m.textarea.MaxHeight = viewportHeight / 2
-		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
-		m.viewport, vpCmd = m.viewport.Update(msg)
-		m.textarea, taCmd = m.textarea.Update(msg)
-		return m, tea.Batch(taCmd, vpCmd)
 	}
+
+	m.textarea.MaxHeight = viewportHeight / 2
+	m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
+	m.viewport, vpCmd = m.viewport.Update(msg)
+	m.textarea, taCmd = m.textarea.Update(msg)
+	return m, tea.Batch(taCmd, vpCmd)
 }
 
 // getNumLines returns the number of lines the text in the textarea takes up (soft-wrapped).
@@ -422,7 +422,6 @@ func (m *model) waitForNextChunk() tea.Msg {
 			return chunk
 		}
 		return streamComplete{}
-
 	}
 }
 

@@ -144,7 +144,7 @@ func (llm *Model) buildMessages(newContent string) []anthropic.MessageParam {
 	return messages
 }
 
-// given a cost in dollars, return a formatted string to be printed to screen
+// given a cost in dollars, return a formatted string to be printed to screen.
 func (llm *Model) DoGetCostOfCurrentChat() float64 {
 	return llm.totalCost
 }

@@ -29,7 +29,7 @@ func StreamPromptCompletion(ctx context.Context, llm LLM, prompt string, enableR
 	return nil
 }
 
-// GetCostOfCurrentChat returns a formatted string of the chat's current cost
+// GetCostOfCurrentChat returns a formatted string of the chat's current cost.
 func GetCostOfCurrentChat(llm LLM) string {
 	cost := llm.DoGetCostOfCurrentChat()
 	if cost == 0 {

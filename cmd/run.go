@@ -16,7 +16,6 @@ import (
 	"golang.org/x/term"
 
 	zone "github.com/lrstanley/bubblezone/v2"
-	// _ "net/http/pprof".
 )
 
 // runCmd represents the run command.
@@ -169,7 +168,5 @@ func runTUI(_ *cobra.Command, _ []string) {
 		maxTokens,
 		style,
 	)
-	// runtime.SetCPUProfileRate(200)
-	// go func() { log.Println(http.ListenAndServe("localhost:6060", nil)) }()
 	tui.Start(initialPrompt)
 }
