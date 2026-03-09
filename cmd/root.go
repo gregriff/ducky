@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime"
 
 	"github.com/gregriff/ducky/config"
 	"github.com/spf13/cobra"
@@ -34,7 +33,6 @@ Keybinds:
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if pprofAddr != "" {
 			go func() {
-				runtime.SetCPUProfileRate(200)
 				log.Println(http.ListenAndServe(pprofAddr, nil))
 			}()
 		}
