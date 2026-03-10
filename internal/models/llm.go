@@ -8,30 +8,23 @@ import (
 
 // LLM defines fields and behavior of all supported LLMs.
 type LLM interface {
-	DoStreamPromptCompletion(
+	StreamPromptCompletion(
 		ctx context.Context,
 		prompt string,
 		enableReasoning bool, // whether the user wants the model to think/reason if supported
 		reasoningEffort *uint8, // only to be used for gpt-5 models
 		responseChan chan StreamChunk,
 	) error
-	DoGetCostOfCurrentChat() float64
-	DoClearChatHistory()
-	DoGetChatHistory() []Message
-	DoGetModelId() string
-	DoesSupportReasoning() bool
+	CurrentChatCost() float64
+	ClearChatHistory()
+	ChatHistory() []Message
+	ModelId() string
+	SupportsReasoning() bool
 }
 
-func StreamPromptCompletion(ctx context.Context, llm LLM, prompt string, enableReasoning bool, reasoningEffort *uint8, responseChan chan StreamChunk) error {
-	if err := llm.DoStreamPromptCompletion(ctx, prompt, enableReasoning, reasoningEffort, responseChan); err != nil {
-		return StreamError{ErrMsg: err.Error()}
-	}
-	return nil
-}
-
-// GetCostOfCurrentChat returns a formatted string of the chat's current cost.
-func GetCostOfCurrentChat(llm LLM) string {
-	cost := llm.DoGetCostOfCurrentChat()
+// FormattedCost returns a formatted string of the chat's current cost.
+func FormattedCost(llm LLM) string {
+	cost := llm.CurrentChatCost()
 	if cost == 0 {
 		return ""
 	}
@@ -43,22 +36,6 @@ func GetCostOfCurrentChat(llm LLM) string {
 	}
 	cents := cost * 100
 	return fmt.Sprintf("%.1f\u00a2", cents)
-}
-
-func ClearChatHistory(llm LLM) {
-	llm.DoClearChatHistory()
-}
-
-func GetChatHistory(llm LLM) {
-	llm.DoGetChatHistory()
-}
-
-func GetModelId(llm LLM) string {
-	return llm.DoGetModelId()
-}
-
-func SupportsReasoning(llm LLM) bool {
-	return llm.DoesSupportReasoning()
 }
 
 // BaseLLM defines fields shared by all supported LLMs.

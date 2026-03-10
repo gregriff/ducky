@@ -386,7 +386,7 @@ func (m *model) getNumLines(text string) int {
 func (m *model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.responseChan = make(chan models.StreamChunk)
 	m.isStreaming = true
-	if m.enableReasoning && m.llm.DoesSupportReasoning() {
+	if m.enableReasoning && m.llm.SupportsReasoning() {
 		m.isReasoning = true
 	}
 
@@ -401,7 +401,11 @@ func (m *model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 
 	m.streamContext, m.stopStreaming = context.WithCancel(context.Background())
 	beginStreaming := func() tea.Msg {
-		return models.StreamPromptCompletion(m.streamContext, m.llm, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
+		err := m.llm.StreamPromptCompletion(m.streamContext, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
+		if err != nil {
+			return models.StreamError{ErrMsg: err.Error()}
+		}
+		return nil
 	}
 
 	return m, tea.Batch(
@@ -489,7 +493,7 @@ func (m *model) handleCtrlC() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	m.chat.Clear() // print something
-	m.llm.DoClearChatHistory()
+	m.llm.ClearChatHistory()
 	m.forceHeaderRefresh = true
 	m.chat.Scrollback.Reset()
 	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
@@ -653,8 +657,8 @@ func (m *model) headerView(width int) string {
 		m.forceHeaderRefresh = false
 	}
 
-	rightText := models.GetModelId(m.llm)
-	if cost := models.GetCostOfCurrentChat(m.llm); cost != "" {
+	rightText := m.llm.ModelId()
+	if cost := models.FormattedCost(m.llm); cost != "" {
 		rightText += " (" + cost + ")"
 	}
 	titleTextWidth := lipgloss.Width(leftText) +

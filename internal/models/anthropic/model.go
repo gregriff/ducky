@@ -45,7 +45,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 	}
 }
 
-func (llm *Model) DoStreamPromptCompletion(ctx context.Context, content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
+func (llm *Model) StreamPromptCompletion(ctx context.Context, content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
@@ -145,26 +145,26 @@ func (llm *Model) buildMessages(newContent string) []anthropic.MessageParam {
 }
 
 // given a cost in dollars, return a formatted string to be printed to screen.
-func (llm *Model) DoGetCostOfCurrentChat() float64 {
+func (llm *Model) CurrentChatCost() float64 {
 	return llm.totalCost
 }
 
-func (llm *Model) DoClearChatHistory() {
+func (llm *Model) ClearChatHistory() {
 	llm.totalCost = 0
 	llm.PromptCount = 0
 	llm.Messages = []models.Message{}
 	// TODO: reset usage
 }
 
-func (llm *Model) DoGetChatHistory() []models.Message {
+func (llm *Model) ChatHistory() []models.Message {
 	return llm.Messages
 }
 
-func (llm *Model) DoGetModelId() string {
+func (llm *Model) ModelId() string {
 	return llm.ModelConfig.ID
 }
 
-func (llm *Model) DoesSupportReasoning() bool {
+func (llm *Model) SupportsReasoning() bool {
 	if thinking := llm.ModelConfig.Thinking; thinking != nil && *thinking {
 		return true
 	}

@@ -139,7 +139,7 @@ func runTUI(_ *cobra.Command, _ []string) {
 
 			var streamError error
 			streamFunc := func() {
-				streamError = model.DoStreamPromptCompletion(context.TODO(), prompt, reasoning, effortPtr, responseChan)
+				streamError = model.StreamPromptCompletion(context.TODO(), prompt, reasoning, effortPtr, responseChan)
 			}
 			go streamFunc()
 

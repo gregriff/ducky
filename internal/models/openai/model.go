@@ -45,7 +45,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 	}
 }
 
-func (llm *Model) DoStreamPromptCompletion(ctx context.Context, content string, enableReasoning bool, reasoningEffort *uint8, responseChan chan models.StreamChunk) error {
+func (llm *Model) StreamPromptCompletion(ctx context.Context, content string, enableReasoning bool, reasoningEffort *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
@@ -167,25 +167,25 @@ func (llm *Model) buildMessages(newContent string) responses.ResponseNewParamsIn
 	return responses.ResponseNewParamsInputUnion{OfInputItemList: messages}
 }
 
-func (llm *Model) DoGetCostOfCurrentChat() float64 {
+func (llm *Model) CurrentChatCost() float64 {
 	return 0
 }
 
-func (llm *Model) DoClearChatHistory() {
+func (llm *Model) ClearChatHistory() {
 	llm.PromptCount = 0
 	llm.Messages = []models.Message{}
 	// TODO: reset usage
 }
 
-func (llm *Model) DoGetChatHistory() []models.Message {
+func (llm *Model) ChatHistory() []models.Message {
 	return llm.Messages
 }
 
-func (llm *Model) DoGetModelId() string {
+func (llm *Model) ModelId() string {
 	return llm.ModelConfig.ID
 }
 
-func (llm *Model) DoesSupportReasoning() bool {
+func (llm *Model) SupportsReasoning() bool {
 	if reasoning := llm.ModelConfig.SupportsReasoning; reasoning != nil && *reasoning {
 		return true
 	}

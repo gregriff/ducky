@@ -5,7 +5,10 @@
 - sql from SQL_BUG.txt, if pasted into prompt, freezes entire program
 - look into sonnet 4-6 config to lower costs, it seems to be doing multi-shot on its own for complex programming prompts
   ==> REASONING EFFORT: incp. this into anthropic models, its already with openai models
-- unload far away text from screen buffer and keep in chat-entries to be lazy loaded once scroll area is near it again. 
+- unload far away text from screen buffer and keep in chat-entries to be lazy loaded once scroll area is near it again: 
+  - print m.viewport.YOffset() to debug scroll pos
+  - calc numLines (for current vp width) for each chatentry
+  - calc which chats can be unrendered, pass that in as startingIndex to Render(), create endIndex param to do this as well. 
 - change top bar to be bottom border only
 - better syntax highlighting???? go profile?
 
