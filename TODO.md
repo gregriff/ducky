@@ -1,9 +1,13 @@
 ## TODO List
 
 #### High Priority
-- enable pprof at all times. profile sluggishness after many prompts, textarea not responsive and eats 90MB and 12% CPU
+- I THINK PASTING IS CAUSING SLOWDOWN: sluggishness after many prompts, textarea not responsive and eats 90MB and 12% CPU
 - sql from SQL_BUG.txt, if pasted into prompt, freezes entire program
 - look into sonnet 4-6 config to lower costs, it seems to be doing multi-shot on its own for complex programming prompts
+  ==> REASONING EFFORT: incp. this into anthropic models, its already with openai models
+- unload far away text from screen buffer and keep in chat-entries to be lazy loaded once scroll area is near it again. 
+- change top bar to be bottom border only
+- better syntax highlighting???? go profile?
 
 #### 100 Go Mistakes Lessons:
 - use variadic options to init TUIModel from CLI args

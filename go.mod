@@ -35,7 +35,7 @@ require (
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
-	github.com/mattn/go-runewidth v0.0.20 // indirect
+	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
@@ -61,6 +61,4 @@ require (
 )
 
 // custom packages
-replace github.com/muesli/termenv => github.com/gregriff/termenv v0.16.200
-
-//replace github.com/muesli/termenv => ../../oss/termenv
+replace github.com/charmbracelet/x/ansi => ../../oss/charmbracelet-x/ansi

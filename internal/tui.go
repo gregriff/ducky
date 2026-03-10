@@ -626,11 +626,9 @@ func (m *model) View() tea.View {
 	m.contentBuilder.Reset()
 	m.contentBuilder.WriteString(
 		zone.Scan(
-			fmt.Sprintf("%s\n%s\n%s",
-				m.headerView(m.viewport.Width()),
-				zone.Mark("chatViewport", m.viewport.View()),
+			m.headerView(m.viewport.Width()) + "\n" +
+				zone.Mark("chatViewport", m.viewport.View()) + "\n" +
 				zone.Mark("promptInput", styles.VP_TA_SPACING+m.textarea.View()),
-			),
 		))
 	v.SetContent(m.contentBuilder.String())
 	return v

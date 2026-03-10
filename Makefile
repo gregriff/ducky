@@ -1,5 +1,5 @@
 run:
-	DEBUG=1 go run . run haiku
+	DEBUG=1 go run . run haiku --pprof=localhost:6060
 
 install:
 	go install
@@ -27,6 +27,7 @@ pprof-cpu:
 	go tool pprof -proto http://localhost:6060/debug/pprof/profile\?seconds\=$(PPROF_SECONDS) > $(PROFILE_DIR)/cpu.prof
 
 pprof-heap:
+	mkdir -p $(PROFILE_DIR)
 	go tool pprof -proto http://localhost:6060/debug/pprof/heap > $(PROFILE_DIR)/heap.prof
 
 # Opens an existing pprof file in the web browser
