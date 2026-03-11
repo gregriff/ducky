@@ -8,7 +8,6 @@ require (
 	charm.land/glamour/v2 v2.0.0
 	charm.land/lipgloss/v2 v2.0.1
 	github.com/anthropics/anthropic-sdk-go v1.26.0
-	github.com/atotto/clipboard v0.1.4
 	github.com/lrstanley/bubblezone/v2 v2.0.0
 	github.com/muesli/reflow v0.3.0
 	github.com/openai/openai-go/v3 v3.22.0
@@ -19,6 +18,7 @@ require (
 
 require (
 	github.com/alecthomas/chroma/v2 v2.20.0 // indirect
+	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.2 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20260223171050-89c142e4aa73 // indirect
