@@ -63,7 +63,15 @@ type (
 )
 
 // NewTUI creates the TUI application with default state.
-func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoningEffort *uint8, maxTokens int, glamourStyle string) *model {
+func NewTUI(
+	systemPrompt string,
+	modelName string,
+	enableReasoning bool,
+	reasoningEffort *uint8,
+	maxTokens int,
+	glamourStyle string,
+	bedrockModel bool,
+) *model {
 	// create and style textarea
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
@@ -85,11 +93,12 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoni
 	s.Spinner = spinner.Points
 	s.Style = styles.TUIStyles.Spinner
 
-	t := &model{
+	return &model{
 		systemPrompt:    systemPrompt,
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
 		reasoningEffort: reasoningEffort,
+		llm:             InitLLMClient(modelName, systemPrompt, maxTokens, bedrockModel),
 
 		textarea: ta,
 		spinner:  s,
@@ -97,9 +106,6 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoni
 		chat:         chat.NewChatModel(glamourStyle),
 		responseChan: make(chan models.StreamChunk),
 	}
-
-	t.llm = InitLLMClient(modelName, systemPrompt, maxTokens)
-	return t
 }
 
 // Start begins the TUI application.
@@ -353,10 +359,10 @@ func (m *model) waitForNextChunk() tea.Msg {
 	case <-m.streamCtx.Done():
 		return models.StreamError{ErrMsg: m.streamCtx.Err().Error()}
 	case chunk, ok := <-m.responseChan:
-		if ok {
-			return chunk
+		if !ok {
+			return streamComplete{}
 		}
-		return streamComplete{}
+		return chunk
 	}
 }
 
@@ -717,7 +723,7 @@ func (m *model) headerView(width int) string {
 
 // InitLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
 // in order to switch between LLMs while preserving message history.
-func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel models.LLM) {
+func InitLLMClient(modelName, systemPrompt string, maxTokens int, bedrockModel bool) (newModel models.LLM) {
 	// var pastMessages []models.Message
 	// if t.model != nil {
 	// 	pastMessages = t.model.DoGetChatHistory()
@@ -732,7 +738,7 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel mode
 	case anthropicErr != nil && openAIErr == nil:
 		newModel = openai.NewModel(systemPrompt, maxTokens, modelName, nil)
 	case openAIErr != nil && anthropicErr == nil:
-		newModel = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil)
+		newModel = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil, bedrockModel)
 	default:
 		// This shouldn't happen if validation functions are implemented correctly
 		newModel = nil

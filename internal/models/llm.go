@@ -4,6 +4,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"strconv"
 )
 
 // LLM defines fields and behavior of all supported LLMs.
@@ -29,7 +30,7 @@ func FormattedCost(llm LLM) string {
 		return ""
 	}
 	if cost >= 1. { // todo: could color red
-		return fmt.Sprintf("$%.2f", cost)
+		return strconv.FormatFloat(cost, 'f', 2, 64)
 	}
 	if cost < 0.0005 {
 		return "less than \u2152 \u00a2"
@@ -57,16 +58,6 @@ type Message struct {
 type Pricing struct {
 	PromptCost   float64 // per token
 	ResponseCost float64 // per token
-}
-
-// BoolPtr is a helper to set optional boolean fields.
-func BoolPtr(b bool) *bool {
-	return &b
-}
-
-// Uint8Ptr is a helper to set optional Uint8 fields.
-func Uint8Ptr(i uint8) *uint8 {
-	return &i
 }
 
 // Bubbletea messsages

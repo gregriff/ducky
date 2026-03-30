@@ -1,6 +1,7 @@
 ## TODO List
 
 #### High Priority
+- capture CTRL+Enter for newline in prompt
 - I THINK PASTING IS CAUSING SLOWDOWN: sluggishness after many prompts, textarea not responsive and eats 90MB and 12% CPU
 - sql from SQL_BUG.txt, if pasted into prompt, freezes entire program
 - look into sonnet 4-6 config to lower costs, it seems to be doing multi-shot on its own for complex programming prompts

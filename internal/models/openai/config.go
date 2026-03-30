@@ -42,8 +42,8 @@ var OpenAIModelConfigurations = map[string]ModelConfig{
 			PromptCost:   10. / 1_000_000,
 			ResponseCost: 40. / 1_000_000,
 		},
-		SupportsReasoning:   models.BoolPtr(true),
-		SupportsTemperature: models.BoolPtr(false),
+		SupportsReasoning:   new(true),
+		SupportsTemperature: new(false),
 	},
 	"o4-mini": {
 		ID: "o4-mini",
@@ -51,8 +51,8 @@ var OpenAIModelConfigurations = map[string]ModelConfig{
 			PromptCost:   1.1 / 1_000_000,
 			ResponseCost: 4.4 / 1_000_000,
 		},
-		SupportsReasoning:   models.BoolPtr(true),
-		SupportsTemperature: models.BoolPtr(false),
+		SupportsReasoning:   new(true),
+		SupportsTemperature: new(false),
 	},
 	"gpt-4o-mini": {
 		ID: "gpt-4o-mini",
@@ -74,7 +74,7 @@ var OpenAIModelConfigurations = map[string]ModelConfig{
 			PromptCost:   1.25 / 1_000_000,
 			ResponseCost: 10. / 1_000_000,
 		},
-		SupportsReasoning: models.BoolPtr(true),
+		SupportsReasoning: new(true),
 	},
 	"gpt-5-mini": {
 		ID: "gpt-5-mini",
@@ -82,7 +82,7 @@ var OpenAIModelConfigurations = map[string]ModelConfig{
 			PromptCost:   .25 / 1_000_000,
 			ResponseCost: 2. / 1_000_000,
 		},
-		SupportsReasoning: models.BoolPtr(true),
+		SupportsReasoning: new(true),
 	},
 	"gpt-5-nano": {
 		ID: "gpt-5-nano",
@@ -90,7 +90,7 @@ var OpenAIModelConfigurations = map[string]ModelConfig{
 			PromptCost:   .05 / 1_000_000,
 			ResponseCost: .4 / 1_000_000,
 		},
-		SupportsReasoning: models.BoolPtr(true),
+		SupportsReasoning: new(true),
 	},
 }
 

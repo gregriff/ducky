@@ -25,7 +25,14 @@ var AnthropicModelConfigurations = map[string]ModelConfig{
 			PromptCost:   3. / 1_000_000,
 			ResponseCost: 15. / 1_000_000,
 		},
-		Thinking: models.BoolPtr(true),
+		Thinking: new(true),
+	},
+	"sonnet-bedrock": {
+		ID: "anthropic.claude-sonnet-4-5-20250929-v1:0",
+		Pricing: models.Pricing{
+			PromptCost:   3. / 1_000_000,
+			ResponseCost: 15. / 1_000_000,
+		},
 	},
 	"haiku": {
 		ID: "claude-haiku-4-5",
@@ -40,7 +47,7 @@ var AnthropicModelConfigurations = map[string]ModelConfig{
 			PromptCost:   5. / 1_000_000,
 			ResponseCost: 25. / 1_000_000,
 		},
-		Thinking: models.BoolPtr(true),
+		Thinking: new(true),
 	},
 }
 

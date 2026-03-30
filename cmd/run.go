@@ -97,6 +97,10 @@ func init() {
 	flagName = "openai-api-key"
 	rootCmd.PersistentFlags().String(flagName, "", "allows access to OpenAI models")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+
+	flagName = "bedrock"
+	rootCmd.PersistentFlags().Bool(flagName, false, "use bedrock client (anthropic only)")
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 }
 
 func runTUI(_ *cobra.Command, _ []string) {
@@ -110,13 +114,14 @@ func runTUI(_ *cobra.Command, _ []string) {
 		_ = os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
 	}
 
-	systemPrompt, modelName, reasoning, effort, maxTokens, style := viper.GetString("system-prompt"),
+	systemPrompt, modelName, reasoning, effort, maxTokens, style, bedrockModel := viper.GetString("system-prompt"),
 		viper.GetString("model"),
 		viper.GetBool("reasoning"),
 		viper.GetUint8("reasoning-effort"),
 		viper.GetInt("max-tokens"),
-		viper.GetString("style")
-	effortPtr := models.Uint8Ptr(effort)
+		viper.GetString("style"),
+		viper.GetBool("bedrock")
+	effortPtr := new(effort)
 
 	var initialPrompt string
 
@@ -134,7 +139,7 @@ func runTUI(_ *cobra.Command, _ []string) {
 			initialPrompt = prompt
 		} else {
 			// TODO: replace this with direct calls to anthropic,openai model constructors
-			model := tui.InitLLMClient(modelName, systemPrompt, maxTokens)
+			model := tui.InitLLMClient(modelName, systemPrompt, maxTokens, bedrockModel)
 			responseChan := make(chan models.StreamChunk)
 
 			var streamError error
@@ -167,6 +172,7 @@ func runTUI(_ *cobra.Command, _ []string) {
 		effortPtr,
 		maxTokens,
 		style,
+		bedrockModel,
 	)
 	tui.Start(initialPrompt)
 }

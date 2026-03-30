@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/bedrock"
 	"github.com/gregriff/ducky/internal/models"
 )
 
@@ -23,13 +24,22 @@ type Model struct {
 }
 
 // NewModel creates a new Anthropic Model to be used for response streaming.
-func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message) *Model {
+func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message, bedrockModel bool) *Model {
 	// allow message history to persist when user changes model being used
 	var messages []models.Message
 	if pastMessages != nil {
 		messages = *pastMessages
 	} else {
 		messages = []models.Message{}
+	}
+
+	var client anthropic.Client
+
+	if bedrockModel {
+		client = anthropic.NewClient(bedrock.WithLoadDefaultConfig(context.Background()))
+		modelName += "-bedrock"
+	} else {
+		client = anthropic.NewClient()
 	}
 
 	return &Model{
@@ -39,7 +49,7 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 			Messages:     messages,
 			PromptCount:  0, // TODO: ensure total usage cost is persisted between model changes
 		},
-		Client:             anthropic.NewClient(), // by default uses os.LookupEnv("ANTHROPIC_API_KEY") TODO: use viper config var
+		Client:             client, // by default uses os.LookupEnv("ANTHROPIC_API_KEY") TODO: use viper config var
 		ModelConfig:        AnthropicModelConfigurations[modelName],
 		SystemPromptObject: []anthropic.TextBlockParam{{Text: systemPrompt}},
 	}
