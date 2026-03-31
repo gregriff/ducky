@@ -2,6 +2,10 @@
 
 #### High Priority
 - capture CTRL+Enter for newline in prompt
+- ctrl+L clears
+- command bar, can switch effort level. make effort cli arg apply to latest sonnet.
+- command to save cur convo as raw markdown to a file. 
+- collapse text from a large paste into a little button, denoting the # lines pasted. 
 - I THINK PASTING IS CAUSING SLOWDOWN: sluggishness after many prompts, textarea not responsive and eats 90MB and 12% CPU
 - sql from SQL_BUG.txt, if pasted into prompt, freezes entire program
 - look into sonnet 4-6 config to lower costs, it seems to be doing multi-shot on its own for complex programming prompts

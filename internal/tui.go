@@ -70,7 +70,7 @@ func NewTUI(
 	reasoningEffort *uint8,
 	maxTokens int,
 	glamourStyle string,
-	bedrockModel bool,
+	bedrockConfig *models.BedrockConfig,
 ) *model {
 	// create and style textarea
 	ta := textarea.New()
@@ -98,7 +98,7 @@ func NewTUI(
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
 		reasoningEffort: reasoningEffort,
-		llm:             InitLLMClient(modelName, systemPrompt, maxTokens, bedrockModel),
+		llm:             InitLLMClient(modelName, systemPrompt, maxTokens, bedrockConfig),
 
 		textarea: ta,
 		spinner:  s,
@@ -723,7 +723,7 @@ func (m *model) headerView(width int) string {
 
 // InitLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
 // in order to switch between LLMs while preserving message history.
-func InitLLMClient(modelName, systemPrompt string, maxTokens int, bedrockModel bool) (newModel models.LLM) {
+func InitLLMClient(modelName, systemPrompt string, maxTokens int, bedrockConfig *models.BedrockConfig) (newModel models.LLM) {
 	// var pastMessages []models.Message
 	// if t.model != nil {
 	// 	pastMessages = t.model.DoGetChatHistory()
@@ -738,7 +738,7 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int, bedrockModel b
 	case anthropicErr != nil && openAIErr == nil:
 		newModel = openai.NewModel(systemPrompt, maxTokens, modelName, nil)
 	case openAIErr != nil && anthropicErr == nil:
-		newModel = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil, bedrockModel)
+		newModel = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil, bedrockConfig)
 	default:
 		// This shouldn't happen if validation functions are implemented correctly
 		newModel = nil

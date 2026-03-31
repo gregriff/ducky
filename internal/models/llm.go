@@ -4,6 +4,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 )
 
@@ -58,6 +59,30 @@ type Message struct {
 type Pricing struct {
 	PromptCost   float64 // per token
 	ResponseCost float64 // per token
+}
+
+type BedrockConfig struct {
+	ExtraCerts bool
+
+	// path to extra CA certs .pem file.
+	CertsPath string
+}
+
+func NewBedrockConfig(extraCerts bool, certsPath string) (BedrockConfig, error) {
+	var c BedrockConfig
+	if !extraCerts {
+		return c, nil
+	}
+
+	if certsPath == "" {
+		return c, fmt.Errorf("extra certs option specified but certs path option is empty")
+	}
+
+	// extra certs enabled, ensure path exists
+	if _, err := os.Stat(certsPath); err != nil {
+		return c, fmt.Errorf("error finding certs file: %w", err)
+	}
+	return BedrockConfig{extraCerts, certsPath}, nil
 }
 
 // Bubbletea messsages

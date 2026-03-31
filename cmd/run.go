@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 
@@ -70,7 +71,7 @@ func init() {
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, true)
 
-	flagName = "reasoning-effort"
+	flagName = "openai.reasoning-effort"
 	rootCmd.PersistentFlags().Uint8P(flagName, "e", 4, "reasoning effort to be used for specific OpenAI reasoning models. (1-4)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, 4)
@@ -90,16 +91,24 @@ func init() {
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, false)
 
-	flagName = "anthropic-api-key"
+	flagName = "anthropic.api-key"
 	rootCmd.PersistentFlags().String(flagName, "", "allows access to Claude models")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 
-	flagName = "openai-api-key"
+	flagName = "openai.api-key"
 	rootCmd.PersistentFlags().String(flagName, "", "allows access to OpenAI models")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 
-	flagName = "bedrock"
+	flagName = "anthropic.bedrock"
 	rootCmd.PersistentFlags().Bool(flagName, false, "use bedrock client (anthropic only)")
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+
+	flagName = "tls.extra-certs"
+	rootCmd.PersistentFlags().Bool(flagName, false, "add extra root-ca certs to TLS (bedrock only)")
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+
+	flagName = "tls.certs-path"
+	rootCmd.PersistentFlags().String(flagName, "", "path to .pem file containing extra .pem certs (bedrock only)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 }
 
@@ -107,21 +116,34 @@ func runTUI(_ *cobra.Command, _ []string) {
 	// note: x_API_KEY will override DUCKY_x_API_KEY here
 	_, exists := os.LookupEnv("OPENAI_API_KEY")
 	if !exists {
-		_ = os.Setenv("OPENAI_API_KEY", viper.GetString("openai-api-key"))
+		_ = os.Setenv("OPENAI_API_KEY", viper.GetString("openai.api-key"))
 	}
 	_, exists = os.LookupEnv("ANTHROPIC_API_KEY")
 	if !exists {
-		_ = os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
+		_ = os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic.api-key"))
 	}
 
-	systemPrompt, modelName, reasoning, effort, maxTokens, style, bedrockModel := viper.GetString("system-prompt"),
+	systemPrompt, modelName, reasoning,
+		effort, maxTokens, style,
+		bedrockModel, extraCerts, certsPath := viper.GetString("system-prompt"),
 		viper.GetString("model"),
 		viper.GetBool("reasoning"),
-		viper.GetUint8("reasoning-effort"),
+		viper.GetUint8("openai.reasoning-effort"),
 		viper.GetInt("max-tokens"),
 		viper.GetString("style"),
-		viper.GetBool("bedrock")
+		viper.GetBool("anthropic.bedrock"),
+		viper.GetBool("tls.extra-certs"),
+		viper.GetString("tls.certs-path")
 	effortPtr := new(effort)
+
+	var bedrockConfig *models.BedrockConfig
+	if bedrockModel {
+		c, err := models.NewBedrockConfig(extraCerts, certsPath)
+		if err != nil {
+			log.Fatalf("error creating bedrock config: %v", err)
+		}
+		bedrockConfig = &c
+	}
 
 	var initialPrompt string
 
@@ -139,7 +161,7 @@ func runTUI(_ *cobra.Command, _ []string) {
 			initialPrompt = prompt
 		} else {
 			// TODO: replace this with direct calls to anthropic,openai model constructors
-			model := tui.InitLLMClient(modelName, systemPrompt, maxTokens, bedrockModel)
+			model := tui.InitLLMClient(modelName, systemPrompt, maxTokens, bedrockConfig)
 			responseChan := make(chan models.StreamChunk)
 
 			var streamError error
@@ -172,7 +194,7 @@ func runTUI(_ *cobra.Command, _ []string) {
 		effortPtr,
 		maxTokens,
 		style,
-		bedrockModel,
+		bedrockConfig,
 	)
 	tui.Start(initialPrompt)
 }

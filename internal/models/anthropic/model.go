@@ -3,18 +3,20 @@ package anthropic
 import (
 	"context"
 	"errors"
+	"log"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/bedrock"
+	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/gregriff/ducky/internal/models"
 )
 
-// Model encapsulates an Anthropic model and satisfies the models.LLM interface.
-type Model struct {
+// model encapsulates an Anthropic model and satisfies the models.LLM interface.
+type model struct {
 	models.BaseLLM
-	Client             anthropic.Client
-	ModelConfig        ModelConfig
-	SystemPromptObject []anthropic.TextBlockParam
+	client             anthropic.Client
+	props              properties
+	systemPromptObject []anthropic.TextBlockParam
 	// TODO: add usage field
 
 	// price in dollars. getter should fmt it to cents if small enough. should
@@ -24,7 +26,13 @@ type Model struct {
 }
 
 // NewModel creates a new Anthropic Model to be used for response streaming.
-func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages *[]models.Message, bedrockModel bool) *Model {
+func NewModel(
+	systemPrompt string,
+	maxTokens int,
+	modelName string,
+	pastMessages *[]models.Message,
+	bedrockConfig *models.BedrockConfig,
+) *model {
 	// allow message history to persist when user changes model being used
 	var messages []models.Message
 	if pastMessages != nil {
@@ -33,29 +41,37 @@ func NewModel(systemPrompt string, maxTokens int, modelName string, pastMessages
 		messages = []models.Message{}
 	}
 
-	var client anthropic.Client
-
-	if bedrockModel {
-		client = anthropic.NewClient(bedrock.WithLoadDefaultConfig(context.Background()))
+	var clientOpts []option.RequestOption
+	if bedrockConfig != nil {
+		clientOpts = append(clientOpts, bedrock.WithLoadDefaultConfig(context.Background()))
 		modelName += "-bedrock"
-	} else {
-		client = anthropic.NewClient()
+
+		if bedrockConfig.ExtraCerts {
+			httpClient, err := newHTTPClientWithExtraCACert(bedrockConfig.CertsPath)
+			if err != nil {
+				log.Fatalf("error creating httpClient with extra certs: %v", err)
+			} else {
+				clientOpts = append(clientOpts, option.WithHTTPClient(httpClient))
+			}
+
+		}
 	}
 
-	return &Model{
+	client := anthropic.NewClient(clientOpts...)
+	return &model{
 		BaseLLM: models.BaseLLM{
 			SystemPrompt: systemPrompt,
 			MaxTokens:    maxTokens,
 			Messages:     messages,
 			PromptCount:  0, // TODO: ensure total usage cost is persisted between model changes
 		},
-		Client:             client, // by default uses os.LookupEnv("ANTHROPIC_API_KEY") TODO: use viper config var
-		ModelConfig:        AnthropicModelConfigurations[modelName],
-		SystemPromptObject: []anthropic.TextBlockParam{{Text: systemPrompt}},
+		client:             client, // by default uses os.LookupEnv("ANTHROPIC_API_KEY") TODO: use viper config var
+		props:              modelProperties[modelName],
+		systemPromptObject: []anthropic.TextBlockParam{{Text: systemPrompt}},
 	}
 }
 
-func (llm *Model) StreamPromptCompletion(ctx context.Context, content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
+func (llm *model) StreamPromptCompletion(ctx context.Context, content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
 	var (
@@ -67,7 +83,7 @@ func (llm *Model) StreamPromptCompletion(ctx context.Context, content string, en
 
 	maxTokens = int64(llm.MaxTokens)
 	fullResponseText := ""
-	if thinkingSupported = llm.ModelConfig.Thinking; thinkingSupported != nil && *thinkingSupported && enableThinking {
+	if thinkingSupported = llm.props.thinking; thinkingSupported != nil && *thinkingSupported && enableThinking {
 		thinking = anthropic.ThinkingConfigParamOfEnabled(maxTokens)
 		if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
 			maxTokens = 2048
@@ -79,9 +95,9 @@ func (llm *Model) StreamPromptCompletion(ctx context.Context, content string, en
 		thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
 	}
 
-	stream := llm.Client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(llm.ModelConfig.ID),
-		System:    llm.SystemPromptObject,
+	stream := llm.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.Model(llm.props.id),
+		System:    llm.systemPromptObject,
 		MaxTokens: maxTokens,
 		Messages:  llm.buildMessages(content),
 		Thinking:  thinking,
@@ -120,8 +136,8 @@ func (llm *Model) StreamPromptCompletion(ctx context.Context, content string, en
 		return errors.New(stream.Err().Error())
 	}
 
-	inputCost := llm.ModelConfig.PromptCost * inputTokens
-	outputCost := llm.ModelConfig.ResponseCost * outputTokens
+	inputCost := llm.props.PromptCost * inputTokens
+	outputCost := llm.props.ResponseCost * outputTokens
 	llm.totalCost += inputCost + outputCost
 
 	// update state
@@ -134,7 +150,7 @@ func (llm *Model) StreamPromptCompletion(ctx context.Context, content string, en
 }
 
 // buildMessages takes the provider-agnostic []models.Message of the chat history and returns the Anthropic chat history data format.
-func (llm *Model) buildMessages(newContent string) []anthropic.MessageParam {
+func (llm *model) buildMessages(newContent string) []anthropic.MessageParam {
 	messages := make([]anthropic.MessageParam, 0, len(llm.Messages)+1)
 	var msg models.Message
 
@@ -155,27 +171,27 @@ func (llm *Model) buildMessages(newContent string) []anthropic.MessageParam {
 }
 
 // given a cost in dollars, return a formatted string to be printed to screen.
-func (llm *Model) CurrentChatCost() float64 {
+func (llm *model) CurrentChatCost() float64 {
 	return llm.totalCost
 }
 
-func (llm *Model) ClearChatHistory() {
+func (llm *model) ClearChatHistory() {
 	llm.totalCost = 0
 	llm.PromptCount = 0
 	llm.Messages = []models.Message{}
 	// TODO: reset usage
 }
 
-func (llm *Model) ChatHistory() []models.Message {
+func (llm *model) ChatHistory() []models.Message {
 	return llm.Messages
 }
 
-func (llm *Model) ModelId() string {
-	return llm.ModelConfig.ID
+func (llm *model) ModelId() string {
+	return llm.props.id
 }
 
-func (llm *Model) SupportsReasoning() bool {
-	if thinking := llm.ModelConfig.Thinking; thinking != nil && *thinking {
+func (llm *model) SupportsReasoning() bool {
+	if thinking := llm.props.thinking; thinking != nil && *thinking {
 		return true
 	}
 	return false
