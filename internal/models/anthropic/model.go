@@ -3,12 +3,9 @@ package anthropic
 import (
 	"context"
 	"errors"
-	"log"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/bedrock"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/gregriff/ducky/internal/models"
 )
 
@@ -44,23 +41,8 @@ func NewModel(
 
 	var clientOpts []option.RequestOption
 	if bedrockConfig != nil {
-		// note: could init httpClient here
-		cfg, err := config.LoadDefaultConfig(context.Background())
-		if err != nil {
-			log.Fatalf("error creating aws config: %v", err)
-		}
-		clientOpts = append(clientOpts, bedrock.WithConfig(cfg))
+		buildBedrockConfig(bedrockConfig, clientOpts)
 		modelName += "-bedrock"
-
-		if bedrockConfig.ExtraCerts {
-			httpClient, err := newHTTPClientWithExtraCACert(bedrockConfig.CertsPath)
-			if err != nil {
-				log.Fatalf("error creating httpClient with extra certs: %v", err)
-			} else {
-				clientOpts = append(clientOpts, option.WithHTTPClient(httpClient))
-			}
-
-		}
 	}
 
 	client := anthropic.NewClient(clientOpts...)
