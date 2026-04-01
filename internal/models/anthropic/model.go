@@ -39,13 +39,13 @@ func NewModel(
 		messages = []models.Message{}
 	}
 
-	var clientOpts []option.RequestOption
+	var opts []option.RequestOption
 	if bedrockConfig != nil {
-		buildBedrockConfig(bedrockConfig, clientOpts)
+		opts = buildBedrockConfig(bedrockConfig, opts)
 		modelName += "-bedrock"
 	}
 
-	client := anthropic.NewClient(clientOpts...)
+	client := anthropic.NewClient(opts...)
 	return &model{
 		BaseLLM: models.BaseLLM{
 			SystemPrompt: systemPrompt,

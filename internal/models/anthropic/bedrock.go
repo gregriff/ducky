@@ -17,14 +17,13 @@ import (
 )
 
 // buildBedrockConfig creates a bedrock config and appends it to opts.
-func buildBedrockConfig(bedrockConfig *models.BedrockConfig, opts []option.RequestOption) {
+func buildBedrockConfig(bedrockConfig *models.BedrockConfig, opts []option.RequestOption) []option.RequestOption {
 	if !bedrockConfig.ExtraCerts {
 		cfg, err := config.LoadDefaultConfig(context.Background())
 		if err != nil {
 			log.Fatalf("error creating aws config: %v", err)
 		}
-		opts = append(opts, bedrock.WithConfig(cfg))
-		return
+		return append(opts, bedrock.WithConfig(cfg))
 	}
 
 	httpClient, err := newCustomCertClient(bedrockConfig.CertsPath)
@@ -39,7 +38,7 @@ func buildBedrockConfig(bedrockConfig *models.BedrockConfig, opts []option.Reque
 		log.Fatalf("error loading default aws config with extra certs: %v", err)
 	}
 
-	opts = append(opts, bedrock.WithConfig(cfg))
+	return append(opts, bedrock.WithConfig(cfg))
 }
 
 func newCustomCertClient(certPath string) (*awshttp.BuildableClient, error) {
