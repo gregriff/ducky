@@ -36,8 +36,8 @@ func buildBedrockConfig(ctx context.Context, bedrockConfig *models.BedrockConfig
 		log.Fatalf("error loading default aws config with extra certs: %v", err)
 	}
 
-	creds, _ := cfg.Credentials.Retrieve(ctx)
-	log.Printf("creds: source:%s, accountID:%s", creds.Source, creds.AccountID)
+	creds, err := cfg.Credentials.Retrieve(ctx)
+	log.Printf("creds:%#v\n source:%s, accountID:%s, credsERR: %v", creds, creds.Source, creds.AccountID, err)
 
 	return append(opts, bedrock.WithConfig(cfg))
 }
