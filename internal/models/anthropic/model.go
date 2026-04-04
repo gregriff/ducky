@@ -3,6 +3,7 @@ package anthropic
 import (
 	"context"
 	"errors"
+	"io"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -125,7 +126,7 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		}
 	}
 
-	if err := stream.Err(); err != nil {
+	if err := stream.Err(); err != nil && err != io.EOF {
 		return err
 	}
 
