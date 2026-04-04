@@ -151,7 +151,7 @@ func runTUI(_ *cobra.Command, _ []string) {
 	// TODO: replace this with direct calls to anthropic,openai model constructors
 	model, err := tui.InitLLMClient(modelName, systemPrompt, maxTokens, bedrockConfig)
 	if err != nil {
-		fmt.Printf("error creating client for %s: %v", modelName, err)
+		fmt.Printf("error creating client for %s: %v\n", modelName, err)
 		os.Exit(1)
 	}
 

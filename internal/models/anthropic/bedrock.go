@@ -44,7 +44,8 @@ func buildBedrockConfig(
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving AWS credentials: %w", err)
 	}
-	log.Printf("source:%s, accountID:%s", creds.Source, creds.AccountID)
+	log.Printf("source:%s\naccountID:%s\nregion:%s\ncfgSources:%#v\nbearerAuthTokenProvider:%#v\n\n",
+		creds.Source, creds.AccountID, cfg.Region, cfg.ConfigSources, cfg.BearerAuthTokenProvider)
 
 	return append(opts, bedrock.WithConfig(cfg)), nil
 }
