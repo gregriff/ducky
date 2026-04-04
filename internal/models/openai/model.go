@@ -2,7 +2,6 @@ package openai
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/gregriff/ducky/internal/math"
@@ -122,8 +121,8 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		}
 	}
 
-	if stream.Err() != nil {
-		return errors.New(stream.Err().Error())
+	if err := stream.Err(); err != nil {
+		return err
 	}
 
 	// update state

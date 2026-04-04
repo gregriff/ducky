@@ -6,7 +6,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	tui "github.com/gregriff/ducky/internal"
 	"github.com/gregriff/ducky/internal/models"
@@ -14,6 +16,7 @@ import (
 	"github.com/gregriff/ducky/internal/models/openai"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/term"
 
 	zone "github.com/lrstanley/bubblezone/v2"
@@ -164,22 +167,36 @@ func runTUI(_ *cobra.Command, _ []string) {
 			model := tui.InitLLMClient(modelName, systemPrompt, maxTokens, bedrockConfig)
 			responseChan := make(chan models.StreamChunk)
 
-			var streamError error
-			streamFunc := func() {
-				streamError = model.StreamPromptCompletion(context.TODO(), prompt, reasoning, effortPtr, responseChan)
-			}
-			go streamFunc()
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
 
-			var fullResponse strings.Builder
-			for chunk := range responseChan {
-				if !chunk.Reasoning {
-					fullResponse.WriteString(chunk.Content)
+			g, gCtx := errgroup.WithContext(ctx)
+			g.Go(func() error {
+				return model.StreamPromptCompletion(gCtx, prompt, reasoning, effortPtr, responseChan)
+			})
+
+			// accumulate response and print when done.
+			g.Go(func() error {
+				var fullResponse strings.Builder
+				for {
+					select {
+					case <-gCtx.Done():
+						return nil
+					case chunk, ok := <-responseChan:
+						if !ok {
+							fmt.Println(fullResponse.String())
+							return nil
+						}
+						if !chunk.Reasoning {
+							fullResponse.WriteString(chunk.Content)
+						}
+					}
 				}
-			}
-			fmt.Println(fullResponse.String())
+			})
 
-			if streamError != nil {
-				fmt.Fprintln(os.Stderr, streamError.Error())
+			// print streaming err if any.
+			if err := g.Wait(); err != nil {
+				fmt.Fprintln(os.Stderr, err.Error())
 			}
 			return
 		}

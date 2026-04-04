@@ -41,7 +41,7 @@ func NewModel(
 
 	var opts []option.RequestOption
 	if bedrockConfig != nil {
-		opts = buildBedrockConfig(bedrockConfig, opts)
+		opts = buildBedrockConfig(context.TODO(), bedrockConfig, opts)
 		modelName += "-bedrock"
 	}
 
@@ -120,15 +120,14 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		}
 	}
 
-	if stream.Err() != nil {
-		return errors.New(stream.Err().Error())
+	if err := stream.Err(); err != nil {
+		return err
 	}
 
+	// update state
 	inputCost := llm.props.PromptCost * inputTokens
 	outputCost := llm.props.ResponseCost * outputTokens
 	llm.totalCost += inputCost + outputCost
-
-	// update state
 	llm.PromptCount++
 
 	if len(fullResponseText) > 0 {
