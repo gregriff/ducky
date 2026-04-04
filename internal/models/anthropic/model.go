@@ -30,7 +30,7 @@ func NewModel(
 	modelName string,
 	pastMessages *[]models.Message,
 	bedrockConfig *models.BedrockConfig,
-) *model {
+) (*model, error) {
 	// allow message history to persist when user changes model being used
 	var messages []models.Message
 	if pastMessages != nil {
@@ -40,13 +40,17 @@ func NewModel(
 	}
 
 	var opts []option.RequestOption
+	var err error
 	if bedrockConfig != nil {
-		opts = buildBedrockConfig(context.TODO(), bedrockConfig, opts)
 		modelName += "-bedrock"
+		opts, err = buildBedrockConfig(context.TODO(), bedrockConfig, opts)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	client := anthropic.NewClient(opts...)
-	return &model{
+	m := &model{
 		BaseLLM: models.BaseLLM{
 			SystemPrompt: systemPrompt,
 			MaxTokens:    maxTokens,
@@ -57,6 +61,7 @@ func NewModel(
 		props:              modelProperties[modelName],
 		systemPromptObject: []anthropic.TextBlockParam{{Text: systemPrompt}},
 	}
+	return m, nil
 }
 
 func (llm *model) StreamPromptCompletion(ctx context.Context, content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {

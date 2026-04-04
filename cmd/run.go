@@ -148,6 +148,13 @@ func runTUI(_ *cobra.Command, _ []string) {
 		bedrockConfig = &c
 	}
 
+	// TODO: replace this with direct calls to anthropic,openai model constructors
+	model, err := tui.InitLLMClient(modelName, systemPrompt, maxTokens, bedrockConfig)
+	if err != nil {
+		fmt.Printf("error creating client for %s: %v", modelName, err)
+		os.Exit(1)
+	}
+
 	var initialPrompt string
 
 	// if stdin is a pipe
@@ -163,8 +170,6 @@ func runTUI(_ *cobra.Command, _ []string) {
 		if viper.GetBool("force-interactive") {
 			initialPrompt = prompt
 		} else {
-			// TODO: replace this with direct calls to anthropic,openai model constructors
-			model := tui.InitLLMClient(modelName, systemPrompt, maxTokens, bedrockConfig)
 			responseChan := make(chan models.StreamChunk)
 
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -205,13 +210,12 @@ func runTUI(_ *cobra.Command, _ []string) {
 	// Run TUI application
 	zone.NewGlobal()
 	tui := tui.NewTUI(
+		model,
 		systemPrompt,
-		modelName,
 		reasoning,
 		effortPtr,
 		maxTokens,
 		style,
-		bedrockConfig,
 	)
 	tui.Start(initialPrompt)
 }

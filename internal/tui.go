@@ -64,13 +64,12 @@ type (
 
 // NewTUI creates the TUI application with default state.
 func NewTUI(
+	llm models.LLM,
 	systemPrompt string,
-	modelName string,
 	enableReasoning bool,
 	reasoningEffort *uint8,
 	maxTokens int,
 	glamourStyle string,
-	bedrockConfig *models.BedrockConfig,
 ) *model {
 	// create and style textarea
 	ta := textarea.New()
@@ -98,7 +97,7 @@ func NewTUI(
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
 		reasoningEffort: reasoningEffort,
-		llm:             InitLLMClient(modelName, systemPrompt, maxTokens, bedrockConfig),
+		llm:             llm,
 
 		textarea: ta,
 		spinner:  s,
@@ -723,7 +722,7 @@ func (m *model) headerView(width int) string {
 
 // InitLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
 // in order to switch between LLMs while preserving message history.
-func InitLLMClient(modelName, systemPrompt string, maxTokens int, bedrockConfig *models.BedrockConfig) (newModel models.LLM) {
+func InitLLMClient(modelName, systemPrompt string, maxTokens int, bedrockConfig *models.BedrockConfig) (newModel models.LLM, err error) {
 	// var pastMessages []models.Message
 	// if t.model != nil {
 	// 	pastMessages = t.model.DoGetChatHistory()
@@ -738,13 +737,13 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int, bedrockConfig 
 	case anthropicErr != nil && openAIErr == nil:
 		newModel = openai.NewModel(systemPrompt, maxTokens, modelName, nil)
 	case openAIErr != nil && anthropicErr == nil:
-		newModel = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil, bedrockConfig)
+		newModel, err = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil, bedrockConfig)
 	default:
 		// This shouldn't happen if validation functions are implemented correctly
 		newModel = nil
 	}
 	if newModel == nil {
-		panic(fmt.Sprintf("Error initializing model:\nantErr: %v\nopenAIerr: %v", anthropicErr, openAIErr))
+		err = fmt.Errorf("error initializing model:\nanthropicError: %w\nopenAIError:%w", anthropicErr, openAIErr)
 	}
-	return newModel
+	return newModel, err
 }

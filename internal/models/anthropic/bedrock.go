@@ -17,29 +17,36 @@ import (
 )
 
 // buildBedrockConfig creates a bedrock config and appends it to opts.
-func buildBedrockConfig(ctx context.Context, bedrockConfig *models.BedrockConfig, opts []option.RequestOption) []option.RequestOption {
+func buildBedrockConfig(
+	ctx context.Context,
+	bedrockConfig *models.BedrockConfig,
+	opts []option.RequestOption,
+) ([]option.RequestOption, error) {
 	if !bedrockConfig.ExtraCerts {
 		cfg, err := config.LoadDefaultConfig(ctx)
 		if err != nil {
-			log.Fatalf("error creating aws config: %v", err)
+			return nil, fmt.Errorf("error creating aws config: %w", err)
 		}
-		return append(opts, bedrock.WithConfig(cfg))
+		return append(opts, bedrock.WithConfig(cfg)), nil
 	}
 
 	httpClient, err := newCustomCertClient(bedrockConfig.CertsPath)
 	if err != nil {
-		log.Fatalf("error creating httpClient with extra certs: %v", err)
+		return nil, fmt.Errorf("error creating httpClient with extra certs: %w", err)
 	}
 
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithHTTPClient(httpClient))
 	if err != nil {
-		log.Fatalf("error loading default aws config with extra certs: %v", err)
+		return nil, fmt.Errorf("error loading default aws config with extra certs: %w", err)
 	}
 
 	creds, err := cfg.Credentials.Retrieve(ctx)
-	log.Printf("creds:%#v\n source:%s, accountID:%s, credsERR: %v", creds, creds.Source, creds.AccountID, err)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving AWS credentials: %w", err)
+	}
+	log.Printf("source:%s, accountID:%s", creds.Source, creds.AccountID)
 
-	return append(opts, bedrock.WithConfig(cfg))
+	return append(opts, bedrock.WithConfig(cfg)), nil
 }
 
 func newCustomCertClient(certPath string) (*awshttp.BuildableClient, error) {
