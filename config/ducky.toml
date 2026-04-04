@@ -4,9 +4,16 @@ reasoning = true
 max-tokens = 2048
 style = "tokyo-night"
 
-# Anthropic only
-anthropic-api-key = ""
+[anthropic]
+api-key = ""
+bedrock = false
 
-# OpenAI only
-openai-api-key = ""
+[open-ai]
+api-key = ""
 reasoning-effort = 4 # GPT-5 only
+
+[tls]
+# at the moment, these two options will only be
+# applied if anthropic.bedrock == true
+extra-certs = false
+certs-path = ""

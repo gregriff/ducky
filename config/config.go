@@ -52,7 +52,6 @@ func InitConfig(file string) {
 		fmt.Println("Error reading config file: ", configErr)
 		os.Exit(1)
 	}
-
 }
 
 func getConfigDir() string {

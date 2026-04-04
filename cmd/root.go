@@ -4,13 +4,18 @@ package cmd
 import (
 	_ "embed" // used to embed the default Markdown styling config file.
 	"fmt"
+	"log"
+	"net/http"
 	"os"
 
 	"github.com/gregriff/ducky/config"
 	"github.com/spf13/cobra"
+
+	_ "net/http/pprof"
 )
 
 var configFile string
+var pprofAddr string
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
@@ -25,9 +30,13 @@ Keybinds:
 - Toggle Focus : esc
 - Text Input Controls : ctrl+a,u,k,e,n,p,b,f,h,m,t,w,d
 `,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if pprofAddr != "" {
+			go func() {
+				log.Println(http.ListenAndServe(pprofAddr, nil))
+			}()
+		}
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -49,4 +58,5 @@ func init() {
 	})
 
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is $XDG_CONFIG_HOME/ducky/ducky.toml)")
+	rootCmd.PersistentFlags().StringVar(&pprofAddr, "pprof", "", "enable pprof on addr (e.g. localhost:6060)")
 }

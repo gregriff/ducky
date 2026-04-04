@@ -11,7 +11,6 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/atotto/clipboard"
 	"github.com/gregriff/ducky/internal/chat"
 	"github.com/gregriff/ducky/internal/math"
 	"github.com/gregriff/ducky/internal/models"
@@ -53,7 +52,7 @@ type model struct {
 	lastWidth          int
 	forceHeaderRefresh bool
 
-	streamContext context.Context
+	streamCtx     context.Context
 	stopStreaming context.CancelFunc
 }
 
@@ -64,7 +63,14 @@ type (
 )
 
 // NewTUI creates the TUI application with default state.
-func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoningEffort *uint8, maxTokens int, glamourStyle string) *model {
+func NewTUI(
+	llm models.LLM,
+	systemPrompt string,
+	enableReasoning bool,
+	reasoningEffort *uint8,
+	maxTokens int,
+	glamourStyle string,
+) *model {
 	// create and style textarea
 	ta := textarea.New()
 	ta.ShowLineNumbers = false
@@ -80,17 +86,18 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoni
 
 	ta.Prompt = "┃ "
 	ta.CharLimit = 100_000
-	ta.SetHeight(styles.TEXTAREA_HEIGHT_NORMAL)
+	ta.SetHeight(styles.TA_HEIGHT_NORMAL)
 
 	s := spinner.New()
 	s.Spinner = spinner.Points
 	s.Style = styles.TUIStyles.Spinner
 
-	t := &model{
+	return &model{
 		systemPrompt:    systemPrompt,
 		maxTokens:       maxTokens,
 		enableReasoning: enableReasoning,
 		reasoningEffort: reasoningEffort,
+		llm:             llm,
 
 		textarea: ta,
 		spinner:  s,
@@ -98,9 +105,6 @@ func NewTUI(systemPrompt string, modelName string, enableReasoning bool, reasoni
 		chat:         chat.NewChatModel(glamourStyle),
 		responseChan: make(chan models.StreamChunk),
 	}
-
-	t.llm = InitLLMClient(modelName, systemPrompt, maxTokens)
-	return t
 }
 
 // Start begins the TUI application.
@@ -126,8 +130,7 @@ func (m *model) Init() tea.Cmd {
 
 // Update updates the TUI UI.
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var spCmd,
-		vpCmd tea.Cmd
+	var spCmd, vpCmd tea.Cmd
 
 	// log.Printf("\n\nMESSAGE RECEIVED: %#v", msg)
 
@@ -159,83 +162,24 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m.handleEnter()
 		}
+	// case tea.PasteStartMsg:
+	// case tea.PasteEndMsg:
 	case tea.PasteMsg:
 		if m.isStreaming { // don't allow paste while streaming
 			return m, nil
 		}
-		// here we grab the paste message before textarea gets it, in order to increase the height of the textarea if
-		// the pasted text has many lines
-		content, _ := clipboard.ReadAll()
-		wrappedLineCount := m.getNumLines(content)
-		if wrappedLineCount > m.textarea.Height() {
-			newHeight := math.Clamp(wrappedLineCount, styles.TEXTAREA_HEIGHT_NORMAL, m.textarea.MaxHeight)
-			windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
-			viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
-
-			m.textarea.SetHeight(newHeight) // this func clamps
-			m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
-		}
+		// grab the paste message before textarea gets it, in order to increase
+		// the height of the textarea if the pasted text has many lines
+		m.handlePaste(msg)
 	case tea.MouseMsg:
-		var (
-			scrollCmd     tea.Cmd
-			scrollKey     tea.KeyMsg
-			triggerScroll bool
-		)
-		mouse := msg.Mouse()
-
 		switch msg := msg.(type) {
 		case tea.MouseClickMsg:
-			// TODO: add right-click functionality
-			if m.isStreaming || msg.Button != tea.MouseLeft {
-				return m, nil
-			}
+			return m.handleClick(msg)
 
-			textareaFocused := m.textarea.Focused()
-			if zone.Get("chatViewport").InBounds(msg) {
-				if m.chat.HistoryLen() == 0 {
-					break // could just return m, nil
-				}
-				// this allows the user to click the viewport and not have the textarea be unfocused if theres not a lot of text in it
-				if textareaFocused && m.getNumLines(m.textarea.Value()) > styles.TEXTAREA_HEIGHT_COLLAPSED {
-					m.textarea.Blur() // TODO: need to collapse it as well
-				}
-			} else if zone.Get("promptInput").InBounds(msg) {
-				if !textareaFocused {
-					return m, m.textarea.Focus()
-				}
-			}
 		case tea.MouseWheelMsg:
-			switch mouse.Button {
-			case tea.MouseWheelUp:
-				// here we don't scroll up if the user has just pressed esc. On mac, the rapid scroll events build up, and may
-				// register after the esc handler, which results in the viewport scrolling up after going to the bottom.
-				// if time.Since(m.lastManualGoToBottom) < 800*time.Millisecond {
-				// return m, nil
-				// }
-				if m.isStreaming { // allow user to scroll up during streaming and keep their position
-					m.preventScrollToBottom = true
-				}
-				triggerScroll, scrollKey = true, tea.KeyPressMsg{Code: tea.KeyUp}
-
-			case tea.MouseWheelDown:
-				triggerScroll, scrollKey = true, tea.KeyPressMsg{Code: tea.KeyDown}
-			}
-
-			// if the mousewheel button is not scroll up or scroll down
-			if !triggerScroll {
+			m, scrollCmd := m.handleScroll(msg)
+			if scrollCmd == nil {
 				break
-			}
-
-			if m.textarea.Focused() {
-				wrappedLineCount := m.getNumLines(m.textarea.Value())
-				taHeight := m.textarea.Height()
-				if wrappedLineCount < taHeight || taHeight == styles.TEXTAREA_HEIGHT_COLLAPSED {
-					m.viewport, scrollCmd = m.viewport.Update(msg)
-				} else {
-					m.textarea, scrollCmd = m.textarea.Update(scrollKey)
-				}
-			} else {
-				m.viewport, scrollCmd = m.viewport.Update(msg)
 			}
 			return m, scrollCmd
 		}
@@ -246,7 +190,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// NOTE: on tmux, regaining focus from switching panes results in `tea.unknownCSISequenceMsg{0x1b, 0x5b, 0x49}`, so this is not run
+	// NOTE: on tmux, regaining focus from switching panes results in
+	// `tea.unknownCSISequenceMsg{0x1b, 0x5b, 0x49}`, so this is not run
 	case tea.FocusMsg:
 		return m, m.textarea.Focus()
 
@@ -254,32 +199,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.promptLLM(m.initialPrompt)
 
 	case models.StreamChunk:
-		m.isReasoning = msg.Reasoning
-		m.chat.AccumulateStream(msg.Content, msg.Reasoning, false)
-
-		m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
-		if !m.preventScrollToBottom {
-			m.viewport.GotoBottom()
-		}
-		return m, m.waitForNextChunk
+		return m.handleStreamChunk(msg)
 
 	// TODO: include usage data by having DoStreamPromptCompletion return this with fields?
 	case streamComplete: // responseChan guaranteed to be empty here
 		return m.handleStreamComplete()
 
 	case models.StreamError:
-		var errMsg string
-
-		// if stream has not been canceled and we indeed have an error
-		if m.streamContext.Err() == nil {
-			errMsg = fmt.Sprintf("**Error:** %v", msg.ErrMsg)
-		} else {
-			// TODO: after 1 cancel, any subsequent error will probably show this message. reset the Context
-			errMsg = ">Stream Cancelled"
-		}
-
-		m.chat.AccumulateStream(errMsg, false, true)
-		return m, m.waitForNextChunk // ensure last chunk is read and let chunk and complete messages handle state
+		return m.handleStreamError(msg)
 
 	case spinner.TickMsg:
 		if m.isStreaming {
@@ -299,17 +226,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// prevent movement keys from scrolling the viewport
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.Key().Text {
 		case "d", "u", "b", "j", "k":
-			break
+			return m, nil
 		}
-	default:
-		m.viewport, vpCmd = m.viewport.Update(msg)
-		return m, vpCmd
 	}
-	return m, nil
+
+	m.viewport, vpCmd = m.viewport.Update(msg)
+	return m, vpCmd
 }
 
 // redraw initiates the Window resize handler. Use it after changing the dimensions of a component to make the others update.
@@ -317,7 +242,7 @@ func (m *model) redraw() tea.Msg {
 	return m.windowSize
 }
 
-// resizeComponents sets size properties on the viewport and textarea
+// resizeComponents sets size properties on the viewport and textarea.
 func (m *model) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
 	m.viewport.SetWidth(windowWidth)
 	m.viewport.SetHeight(viewportHeight)
@@ -365,13 +290,13 @@ func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.viewport, vpCmd = m.viewport.Update(msg)
 		m.textarea, taCmd = m.textarea.Update(msg)
 		return m, tea.Batch(taCmd, vpCmd)
-	} else {
-		m.textarea.MaxHeight = viewportHeight / 2
-		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
-		m.viewport, vpCmd = m.viewport.Update(msg)
-		m.textarea, taCmd = m.textarea.Update(msg)
-		return m, tea.Batch(taCmd, vpCmd)
 	}
+
+	m.textarea.MaxHeight = viewportHeight / 2
+	m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
+	m.viewport, vpCmd = m.viewport.Update(msg)
+	m.textarea, taCmd = m.textarea.Update(msg)
+	return m, tea.Batch(taCmd, vpCmd)
 }
 
 // getNumLines returns the number of lines the text in the textarea takes up (soft-wrapped).
@@ -386,7 +311,7 @@ func (m *model) getNumLines(text string) int {
 func (m *model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.responseChan = make(chan models.StreamChunk)
 	m.isStreaming = true
-	if m.enableReasoning && m.llm.DoesSupportReasoning() {
+	if m.enableReasoning && m.llm.SupportsReasoning() {
 		m.isReasoning = true
 	}
 
@@ -397,11 +322,15 @@ func (m *model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.chat.AddPrompt(prompt)
 	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 	m.viewport.GotoBottom()
-	m.textarea.SetHeight(styles.TEXTAREA_HEIGHT_COLLAPSED)
+	m.textarea.SetHeight(styles.TA_HEIGHT_COLLAPSED)
 
-	m.streamContext, m.stopStreaming = context.WithCancel(context.Background())
+	m.streamCtx, m.stopStreaming = context.WithCancel(context.Background())
 	beginStreaming := func() tea.Msg {
-		return models.StreamPromptCompletion(m.streamContext, m.llm, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
+		err := m.llm.StreamPromptCompletion(m.streamCtx, prompt, m.enableReasoning, m.reasoningEffort, m.responseChan)
+		if err != nil {
+			return models.StreamError{ErrMsg: err.Error()}
+		}
+		return nil
 	}
 
 	return m, tea.Batch(
@@ -412,17 +341,27 @@ func (m *model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	)
 }
 
+func (m *model) handleStreamChunk(msg models.StreamChunk) (tea.Model, tea.Cmd) {
+	m.isReasoning = msg.Reasoning
+	m.chat.AccumulateStream(msg.Content, msg.Reasoning, false)
+
+	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
+	if !m.preventScrollToBottom {
+		m.viewport.GotoBottom()
+	}
+	return m, m.waitForNextChunk
+}
+
 // waitForNextChunk notifies the Update function when a response chunk arrives, and also when the response is completed.
 func (m *model) waitForNextChunk() tea.Msg {
 	select {
-	case <-m.streamContext.Done():
-		return models.StreamError{ErrMsg: m.streamContext.Err().Error()}
+	case <-m.streamCtx.Done():
+		return models.StreamError{ErrMsg: m.streamCtx.Err().Error()}
 	case chunk, ok := <-m.responseChan:
-		if ok {
-			return chunk
+		if !ok {
+			return streamComplete{}
 		}
-		return streamComplete{}
-
+		return chunk
 	}
 }
 
@@ -462,6 +401,67 @@ func (m *model) handleStreamComplete() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *model) handleStreamError(msg models.StreamError) (tea.Model, tea.Cmd) {
+	var errMsg string
+
+	// if stream has not been canceled and we indeed have an error
+	if m.streamCtx.Err() == nil {
+		errMsg = fmt.Sprintf("**Error:** %v", msg.ErrMsg)
+	} else {
+		// TODO: after 1 cancel, any subsequent error will probably show this message. reset the Context
+		errMsg = ">Stream Cancelled"
+	}
+
+	m.chat.AccumulateStream(errMsg, false, true)
+	return m, m.waitForNextChunk // ensure last chunk is read and let chunk and complete messages handle state
+}
+
+func (m *model) handleScroll(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
+	var (
+		scrollCmd     tea.Cmd
+		scrollKey     tea.KeyMsg
+		triggerScroll bool
+		mouse         = msg.Mouse()
+	)
+	switch mouse.Button {
+	case tea.MouseWheelUp:
+		// here we don't scroll up if the user has just pressed esc. On mac, the rapid scroll events build up, and may
+		// register after the esc handler, which results in the viewport scrolling up after going to the bottom.
+		// if time.Since(m.lastManualGoToBottom) < 800*time.Millisecond {
+		// return m, nil
+		// }
+		if m.isStreaming { // allow user to scroll up during streaming and keep their position
+			m.preventScrollToBottom = true
+		}
+		triggerScroll, scrollKey = true, tea.KeyPressMsg{Code: tea.KeyUp}
+
+	case tea.MouseWheelDown:
+		triggerScroll, scrollKey = true, tea.KeyPressMsg{Code: tea.KeyDown}
+	}
+
+	// if the mousewheel button is not scroll up or scroll down
+	if !triggerScroll {
+		return m, nil
+	}
+
+	if m.textarea.Focused() {
+		wrappedLineCount := m.getNumLines(m.textarea.Value())
+		taHeight := m.textarea.Height()
+		if wrappedLineCount < taHeight || taHeight == styles.TA_HEIGHT_COLLAPSED {
+			m.viewport, scrollCmd = m.viewport.Update(msg)
+		} else {
+			m.textarea, scrollCmd = m.textarea.Update(scrollKey)
+		}
+	} else {
+		// TODO: calculate YOffset and unrender/rerender chat history by:
+		// m.viewport.SetContent(m.chat.Render()) <- add YOffset param
+		// - only run SetContent if YOffset has just entered a new chatentry bounds
+		// NOTE: YOffset will change when you decrease the amount of text in the viewport
+		m.viewport, scrollCmd = m.viewport.Update(msg)
+	}
+	return m, scrollCmd
+}
+
 func (m *model) handleEscape() (tea.Model, tea.Cmd) {
 	// m.viewport.GotoBottom()
 	// m.lastManualGoToBottom = time.Now()
@@ -490,7 +490,7 @@ func (m *model) handleCtrlC() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	m.chat.Clear() // print something
-	m.llm.DoClearChatHistory()
+	m.llm.ClearChatHistory()
 	m.forceHeaderRefresh = true
 	m.chat.Scrollback.Reset()
 	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
@@ -511,6 +511,52 @@ func (m *model) handleEnter() (tea.Model, tea.Cmd) {
 
 	// Start LLM streaming
 	return m.promptLLM(input)
+}
+
+// handleClick handles left mouse clicks.
+// TODO: handle right clicks
+func (m *model) handleClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	var vpCmd tea.Cmd
+	if m.isStreaming || msg.Button != tea.MouseLeft {
+		return m, nil
+	}
+
+	if zone.Get("chatViewport").InBounds(msg) {
+		if m.chat.HistoryLen() == 0 {
+			return m, nil
+		}
+		// this allows the user to click the viewport and not have the
+		// textarea be unfocused if theres not a lot of text in it
+		if m.textarea.Focused() && m.getNumLines(m.textarea.Value()) > styles.TA_HEIGHT_COLLAPSED {
+			m.textarea.Blur() // NOTE: could collapse it as well
+			m.viewport, vpCmd = m.viewport.Update(msg)
+			return m, vpCmd
+		}
+	} else if zone.Get("promptInput").InBounds(msg) {
+		if !m.textarea.Focused() {
+			return m, m.textarea.Focus()
+		}
+	}
+
+	if m.textarea.Focused() {
+		return m.updateTextarea(msg)
+	}
+
+	m.viewport, vpCmd = m.viewport.Update(msg)
+	return m, vpCmd
+}
+
+func (m *model) handlePaste(msg tea.PasteMsg) {
+	// content, _ := clipboard.ReadAll()
+	wrappedLineCount := m.getNumLines(msg.Content)
+	if wrappedLineCount > m.textarea.Height() {
+		newHeight := math.Clamp(wrappedLineCount, styles.TA_HEIGHT_NORMAL, m.textarea.MaxHeight)
+		windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
+		viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
+
+		m.textarea.SetHeight(newHeight) // this func clamps
+		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
+	}
 }
 
 // allowScrollback checks the cursor position in the textarea and returns whether triggering a scrollback action can take place.
@@ -559,7 +605,7 @@ func (m *model) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newHeight int
 		taCmd     tea.Cmd
 	)
-	expanded, collapsed := styles.TEXTAREA_HEIGHT_NORMAL, styles.TEXTAREA_HEIGHT_COLLAPSED
+	expanded, collapsed := styles.TA_HEIGHT_NORMAL, styles.TA_HEIGHT_COLLAPSED
 	if m.textarea.Length() > 0 {
 		if m.textarea.Height() < expanded {
 			newHeight = expanded
@@ -627,11 +673,9 @@ func (m *model) View() tea.View {
 	m.contentBuilder.Reset()
 	m.contentBuilder.WriteString(
 		zone.Scan(
-			fmt.Sprintf("%s\n%s\n%s",
-				m.headerView(m.viewport.Width()),
-				zone.Mark("chatViewport", m.viewport.View()),
+			m.headerView(m.viewport.Width()) + "\n" +
+				zone.Mark("chatViewport", m.viewport.View()) + "\n" +
 				zone.Mark("promptInput", styles.VP_TA_SPACING+m.textarea.View()),
-			),
 		))
 	v.SetContent(m.contentBuilder.String())
 	return v
@@ -656,8 +700,8 @@ func (m *model) headerView(width int) string {
 		m.forceHeaderRefresh = false
 	}
 
-	rightText := models.GetModelId(m.llm)
-	if cost := models.GetCostOfCurrentChat(m.llm); cost != "" {
+	rightText := m.llm.ModelId()
+	if cost := models.FormattedCost(m.llm); cost != "" {
 		rightText += " (" + cost + ")"
 	}
 	titleTextWidth := lipgloss.Width(leftText) +
@@ -678,7 +722,7 @@ func (m *model) headerView(width int) string {
 
 // InitLLMClient creates an LLM Client given a modelName. It is called at TUI init, and can be called any time later
 // in order to switch between LLMs while preserving message history.
-func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel models.LLM) {
+func InitLLMClient(modelName, systemPrompt string, maxTokens int, bedrockConfig *models.BedrockConfig) (newModel models.LLM, err error) {
 	// var pastMessages []models.Message
 	// if t.model != nil {
 	// 	pastMessages = t.model.DoGetChatHistory()
@@ -693,13 +737,13 @@ func InitLLMClient(modelName, systemPrompt string, maxTokens int) (newModel mode
 	case anthropicErr != nil && openAIErr == nil:
 		newModel = openai.NewModel(systemPrompt, maxTokens, modelName, nil)
 	case openAIErr != nil && anthropicErr == nil:
-		newModel = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil)
+		newModel, err = anthropic.NewModel(systemPrompt, maxTokens, modelName, nil, bedrockConfig)
 	default:
 		// This shouldn't happen if validation functions are implemented correctly
 		newModel = nil
 	}
 	if newModel == nil {
-		panic(fmt.Sprintf("Error initializing model:\nantErr: %v\nopenAIerr: %v", anthropicErr, openAIErr))
+		err = fmt.Errorf("error initializing model:\nanthropicError: %w\nopenAIError:%w", anthropicErr, openAIErr)
 	}
-	return newModel
+	return newModel, err
 }

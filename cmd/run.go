@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	tui "github.com/gregriff/ducky/internal"
 	"github.com/gregriff/ducky/internal/models"
@@ -13,10 +16,10 @@ import (
 	"github.com/gregriff/ducky/internal/models/openai"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/term"
 
 	zone "github.com/lrstanley/bubblezone/v2"
-	// _ "net/http/pprof".
 )
 
 // runCmd represents the run command.
@@ -71,7 +74,7 @@ func init() {
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, true)
 
-	flagName = "reasoning-effort"
+	flagName = "openai.reasoning-effort"
 	rootCmd.PersistentFlags().Uint8P(flagName, "e", 4, "reasoning effort to be used for specific OpenAI reasoning models. (1-4)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, 4)
@@ -91,12 +94,24 @@ func init() {
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, false)
 
-	flagName = "anthropic-api-key"
+	flagName = "anthropic.api-key"
 	rootCmd.PersistentFlags().String(flagName, "", "allows access to Claude models")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 
-	flagName = "openai-api-key"
+	flagName = "openai.api-key"
 	rootCmd.PersistentFlags().String(flagName, "", "allows access to OpenAI models")
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+
+	flagName = "anthropic.bedrock"
+	rootCmd.PersistentFlags().Bool(flagName, false, "use bedrock client (anthropic only)")
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+
+	flagName = "tls.extra-certs"
+	rootCmd.PersistentFlags().Bool(flagName, false, "add extra root-ca certs to TLS (bedrock only)")
+	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
+
+	flagName = "tls.certs-path"
+	rootCmd.PersistentFlags().String(flagName, "", "path to .pem file containing extra .pem certs (bedrock only)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 }
 
@@ -104,20 +119,41 @@ func runTUI(_ *cobra.Command, _ []string) {
 	// note: x_API_KEY will override DUCKY_x_API_KEY here
 	_, exists := os.LookupEnv("OPENAI_API_KEY")
 	if !exists {
-		_ = os.Setenv("OPENAI_API_KEY", viper.GetString("openai-api-key"))
+		_ = os.Setenv("OPENAI_API_KEY", viper.GetString("openai.api-key"))
 	}
 	_, exists = os.LookupEnv("ANTHROPIC_API_KEY")
 	if !exists {
-		_ = os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic-api-key"))
+		_ = os.Setenv("ANTHROPIC_API_KEY", viper.GetString("anthropic.api-key"))
 	}
 
-	systemPrompt, modelName, reasoning, effort, maxTokens, style := viper.GetString("system-prompt"),
+	systemPrompt, modelName, reasoning,
+		effort, maxTokens, style,
+		bedrockModel, extraCerts, certsPath := viper.GetString("system-prompt"),
 		viper.GetString("model"),
 		viper.GetBool("reasoning"),
-		viper.GetUint8("reasoning-effort"),
+		viper.GetUint8("openai.reasoning-effort"),
 		viper.GetInt("max-tokens"),
-		viper.GetString("style")
-	effortPtr := models.Uint8Ptr(effort)
+		viper.GetString("style"),
+		viper.GetBool("anthropic.bedrock"),
+		viper.GetBool("tls.extra-certs"),
+		viper.GetString("tls.certs-path")
+	effortPtr := new(effort)
+
+	var bedrockConfig *models.BedrockConfig
+	if bedrockModel {
+		c, err := models.NewBedrockConfig(extraCerts, certsPath)
+		if err != nil {
+			log.Fatalf("error creating bedrock config: %v", err)
+		}
+		bedrockConfig = &c
+	}
+
+	// TODO: replace this with direct calls to anthropic,openai model constructors
+	model, err := tui.InitLLMClient(modelName, systemPrompt, maxTokens, bedrockConfig)
+	if err != nil {
+		fmt.Printf("error creating client for %s: %v\n", modelName, err)
+		os.Exit(1)
+	}
 
 	var initialPrompt string
 
@@ -134,26 +170,38 @@ func runTUI(_ *cobra.Command, _ []string) {
 		if viper.GetBool("force-interactive") {
 			initialPrompt = prompt
 		} else {
-			// TODO: replace this with direct calls to anthropic,openai model constructors
-			model := tui.InitLLMClient(modelName, systemPrompt, maxTokens)
 			responseChan := make(chan models.StreamChunk)
 
-			var streamError error
-			streamFunc := func() {
-				streamError = model.DoStreamPromptCompletion(context.TODO(), prompt, reasoning, effortPtr, responseChan)
-			}
-			go streamFunc()
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
 
-			var fullResponse strings.Builder
-			for chunk := range responseChan {
-				if !chunk.Reasoning {
-					fullResponse.WriteString(chunk.Content)
+			g, gCtx := errgroup.WithContext(ctx)
+			g.Go(func() error {
+				return model.StreamPromptCompletion(gCtx, prompt, reasoning, effortPtr, responseChan)
+			})
+
+			// accumulate response and print when done.
+			g.Go(func() error {
+				var fullResponse strings.Builder
+				for {
+					select {
+					case <-gCtx.Done():
+						return nil
+					case chunk, ok := <-responseChan:
+						if !ok {
+							fmt.Println(fullResponse.String())
+							return nil
+						}
+						if !chunk.Reasoning {
+							fullResponse.WriteString(chunk.Content)
+						}
+					}
 				}
-			}
-			fmt.Println(fullResponse.String())
+			})
 
-			if streamError != nil {
-				fmt.Fprintln(os.Stderr, streamError.Error())
+			// print streaming err if any.
+			if err := g.Wait(); err != nil {
+				fmt.Fprintln(os.Stderr, err.Error())
 			}
 			return
 		}
@@ -162,14 +210,12 @@ func runTUI(_ *cobra.Command, _ []string) {
 	// Run TUI application
 	zone.NewGlobal()
 	tui := tui.NewTUI(
+		model,
 		systemPrompt,
-		modelName,
 		reasoning,
 		effortPtr,
 		maxTokens,
 		style,
 	)
-	// runtime.SetCPUProfileRate(200)
-	// go func() { log.Println(http.ListenAndServe("localhost:6060", nil)) }()
 	tui.Start(initialPrompt)
 }

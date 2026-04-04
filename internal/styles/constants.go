@@ -9,8 +9,9 @@ const (
 	WIDTH_PROPORTION_PROMPT   float64 = 6 / 7.
 	WIDTH_PROPORTION_RESPONSE float64 = 9 / 10.
 
-	TEXTAREA_HEIGHT_COLLAPSED int = 1
-	TEXTAREA_HEIGHT_NORMAL    int = 3
+	// for expanding and shrinking the tetarea
+	TA_HEIGHT_COLLAPSED int = 1
+	TA_HEIGHT_NORMAL    int = 3
 
 	// spacing between the main viewport and the textarea.
 	VP_TA_SPACING      string = "\n"

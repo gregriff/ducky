@@ -4,61 +4,40 @@ package models
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 )
 
 // LLM defines fields and behavior of all supported LLMs.
 type LLM interface {
-	DoStreamPromptCompletion(
+	StreamPromptCompletion(
 		ctx context.Context,
 		prompt string,
 		enableReasoning bool, // whether the user wants the model to think/reason if supported
 		reasoningEffort *uint8, // only to be used for gpt-5 models
 		responseChan chan StreamChunk,
 	) error
-	DoGetCostOfCurrentChat() float64
-	DoClearChatHistory()
-	DoGetChatHistory() []Message
-	DoGetModelId() string
-	DoesSupportReasoning() bool
+	CurrentChatCost() float64
+	ClearChatHistory()
+	ChatHistory() []Message
+	ModelId() string
+	SupportsReasoning() bool
 }
 
-func StreamPromptCompletion(ctx context.Context, llm LLM, prompt string, enableReasoning bool, reasoningEffort *uint8, responseChan chan StreamChunk) error {
-	if err := llm.DoStreamPromptCompletion(ctx, prompt, enableReasoning, reasoningEffort, responseChan); err != nil {
-		return StreamError{ErrMsg: err.Error()}
-	}
-	return nil
-}
-
-// GetCostOfCurrentChat returns a formatted string of the chat's current cost
-func GetCostOfCurrentChat(llm LLM) string {
-	cost := llm.DoGetCostOfCurrentChat()
+// FormattedCost returns a formatted string of the chat's current cost.
+func FormattedCost(llm LLM) string {
+	cost := llm.CurrentChatCost()
 	if cost == 0 {
 		return ""
 	}
 	if cost >= 1. { // todo: could color red
-		return fmt.Sprintf("$%.2f", cost)
+		return strconv.FormatFloat(cost, 'f', 2, 64)
 	}
 	if cost < 0.0005 {
 		return "less than \u2152 \u00a2"
 	}
 	cents := cost * 100
 	return fmt.Sprintf("%.1f\u00a2", cents)
-}
-
-func ClearChatHistory(llm LLM) {
-	llm.DoClearChatHistory()
-}
-
-func GetChatHistory(llm LLM) {
-	llm.DoGetChatHistory()
-}
-
-func GetModelId(llm LLM) string {
-	return llm.DoGetModelId()
-}
-
-func SupportsReasoning(llm LLM) bool {
-	return llm.DoesSupportReasoning()
 }
 
 // BaseLLM defines fields shared by all supported LLMs.
@@ -82,14 +61,28 @@ type Pricing struct {
 	ResponseCost float64 // per token
 }
 
-// BoolPtr is a helper to set optional boolean fields.
-func BoolPtr(b bool) *bool {
-	return &b
+type BedrockConfig struct {
+	ExtraCerts bool
+
+	// path to extra CA certs .pem file.
+	CertsPath string
 }
 
-// Uint8Ptr is a helper to set optional Uint8 fields.
-func Uint8Ptr(i uint8) *uint8 {
-	return &i
+func NewBedrockConfig(extraCerts bool, certsPath string) (BedrockConfig, error) {
+	var c BedrockConfig
+	if !extraCerts {
+		return c, nil
+	}
+
+	if certsPath == "" {
+		return c, fmt.Errorf("extra certs option specified but certs path option is empty")
+	}
+
+	// extra certs enabled, ensure path exists
+	if _, err := os.Stat(certsPath); err != nil {
+		return c, fmt.Errorf("error finding certs file: %w", err)
+	}
+	return BedrockConfig{extraCerts, certsPath}, nil
 }
 
 // Bubbletea messsages

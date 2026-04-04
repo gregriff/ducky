@@ -1,18 +1,35 @@
 ## TODO List
 
 #### High Priority
+- capture CTRL+Enter for newline in prompt
+- ctrl+L clears
+- command bar, can switch effort level. make effort cli arg apply to latest sonnet.
+- command to save cur convo as raw markdown to a file. 
+- collapse text from a large paste into a little button, denoting the # lines pasted. 
+- I THINK PASTING IS CAUSING SLOWDOWN: sluggishness after many prompts, textarea not responsive and eats 90MB and 12% CPU
 - sql from SQL_BUG.txt, if pasted into prompt, freezes entire program
+- look into sonnet 4-6 config to lower costs, it seems to be doing multi-shot on its own for complex programming prompts
+  ==> REASONING EFFORT: incp. this into anthropic models, its already with openai models
+- unload far away text from screen buffer and keep in chat-entries to be lazy loaded once scroll area is near it again: 
+  - print m.viewport.YOffset() to debug scroll pos
+  - calc numLines (for current vp width) for each chatentry
+  - calc which chats can be unrendered, pass that in as startingIndex to Render(), create endIndex param to do this as well. 
+- change top bar to be bottom border only
+- better syntax highlighting???? go profile?
 
 #### 100 Go Mistakes Lessons:
 - use variadic options to init TUIModel from CLI args
 
 #### Bugs:
-- cursor is broken since migration to bubbletea V2 (tell it to blink, seperate from the focus cmd now)
-- cursor should be placed at end of line when placeholder shows up
+- cursor should be placed at end of line when placeholder shows up, and should blink/focus on application start
 - textarea is not foused on startup on tmux
 - scrollback history is not preserved after clearing history. Fix this by adding an `entireHistory` field to chat.Model, where `history` is initially this same slice, but after a CLEAR HISTORY, it becomes a re-slice of `entireHistory`. only the scrollback functionality should use `entireHistory`. refer to book page 67 when implementing this
 
+#### Refactors:
+- rethink LLM interface design, middle layer not needed?
+
 #### UI:
+- only show cost when holding settings key
 - insert 1 newline of top padding when rendering reasoning text
 - move horizontal padding out into the view functions. dont pad in md renderer. add left gutter for copy?
 - add popup command menu when holding ctrl
