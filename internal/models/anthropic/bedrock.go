@@ -44,8 +44,12 @@ func buildBedrockConfig(
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving AWS credentials: %w", err)
 	}
-	log.Printf("source:%s\naccountID:%s\nregion:%s\ncfgSources:%#v\nbearerAuthTokenProvider:%#v\n\n",
-		creds.Source, creds.AccountID, cfg.Region, cfg.ConfigSources, cfg.BearerAuthTokenProvider)
+	log.Printf("source:%s\naccountID:%s\nregion:%s\ncfgSources:%#v\n\n",
+		creds.Source, creds.AccountID, cfg.Region, cfg.ConfigSources)
+
+	// this needs to be unset so that AWS SigV4 signing is used for the chat session.
+	cfg.BearerAuthTokenProvider = nil
+	log.Printf("bearerAuthTokenProvider:%#v\n", cfg.BearerAuthTokenProvider)
 
 	return append(opts, bedrock.WithConfig(cfg)), nil
 }
