@@ -28,7 +28,7 @@ var modelProperties = map[string]properties{
 		thinking: new(true),
 	},
 	"sonnet-bedrock": {
-		id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+		id: "us.anthropic.claude-sonnet-4-6",
 		Pricing: models.Pricing{
 			PromptCost:   3. / 1_000_000,
 			ResponseCost: 15. / 1_000_000,
