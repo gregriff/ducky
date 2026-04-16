@@ -21,6 +21,9 @@ type LLM interface {
 	ClearChatHistory()
 	ChatHistory() []Message
 	ModelId() string
+
+	// ModelInfoText is used to print information about the current model in the TUI's header.
+	ModelInfoText() string
 	SupportsReasoning() bool
 }
 
@@ -62,18 +65,12 @@ type Pricing struct {
 }
 
 type BedrockConfig struct {
-	ExtraCerts bool
-
 	// path to extra CA certs .pem file.
 	CertsPath string
 }
 
-func NewBedrockConfig(extraCerts bool, certsPath string) (BedrockConfig, error) {
+func NewBedrockConfig(certsPath string) (BedrockConfig, error) {
 	var c BedrockConfig
-	if !extraCerts {
-		return c, nil
-	}
-
 	if certsPath == "" {
 		return c, fmt.Errorf("extra certs option specified but certs path option is empty")
 	}
@@ -82,7 +79,7 @@ func NewBedrockConfig(extraCerts bool, certsPath string) (BedrockConfig, error) 
 	if _, err := os.Stat(certsPath); err != nil {
 		return c, fmt.Errorf("error finding certs file: %w", err)
 	}
-	return BedrockConfig{extraCerts, certsPath}, nil
+	return BedrockConfig{certsPath}, nil
 }
 
 // Bubbletea messsages

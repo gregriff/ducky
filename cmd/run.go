@@ -18,8 +18,6 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/term"
-
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 // runCmd represents the run command.
@@ -30,9 +28,9 @@ var runCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	PreRunE: func(_ *cobra.Command, args []string) error {
 		if len(args) > 0 {
-			viper.Set("model", args[0])
+			viper.Set("model.name", args[0])
 		}
-		modelName := viper.GetString("model")
+		modelName := viper.GetString("model.name")
 		if modelName == "" {
 			return fmt.Errorf("model must be specified via argument, flag, or config file")
 		}
@@ -64,12 +62,12 @@ func init() {
 
 	var flagName string
 
-	flagName = "system-prompt"
+	flagName = "model.system-prompt"
 	rootCmd.PersistentFlags().StringP(flagName, "P", "", "system prompt that will influence model responses")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, "You are a concise assistant to a software engineer")
 
-	flagName = "reasoning"
+	flagName = "model.reasoning"
 	rootCmd.PersistentFlags().BoolP(flagName, "r", true, "enable reasoning/thinking for supported models")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, true)
@@ -79,12 +77,12 @@ func init() {
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, 4)
 
-	flagName = "max-tokens"
+	flagName = "model.max-tokens"
 	rootCmd.PersistentFlags().IntP(flagName, "t", 0, "output token budget for each response")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, 2048)
 
-	flagName = "style"
+	flagName = "ui.style"
 	rootCmd.PersistentFlags().StringP(flagName, "s", "", "glamour style used to render Markdown responses (default tokyo-night)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, "tokyo-night")
@@ -106,12 +104,8 @@ func init() {
 	rootCmd.PersistentFlags().Bool(flagName, false, "use bedrock client (anthropic only)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 
-	flagName = "tls.extra-certs"
-	rootCmd.PersistentFlags().Bool(flagName, false, "add extra root-ca certs to TLS (bedrock only)")
-	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
-
 	flagName = "tls.certs-path"
-	rootCmd.PersistentFlags().String(flagName, "", "path to .pem file containing extra .pem certs (bedrock only)")
+	rootCmd.PersistentFlags().String(flagName, "", "path to .pem file containing extra CA certs (bedrock only)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 }
 
@@ -128,20 +122,19 @@ func runTUI(_ *cobra.Command, _ []string) {
 
 	systemPrompt, modelName, reasoning,
 		effort, maxTokens, style,
-		bedrockModel, extraCerts, certsPath := viper.GetString("system-prompt"),
-		viper.GetString("model"),
-		viper.GetBool("reasoning"),
+		bedrockModel, certsPath := viper.GetString("model.system-prompt"),
+		viper.GetString("model.name"),
+		viper.GetBool("model.reasoning"),
 		viper.GetUint8("openai.reasoning-effort"),
-		viper.GetInt("max-tokens"),
-		viper.GetString("style"),
+		viper.GetInt("model.max-tokens"),
+		viper.GetString("ui.style"),
 		viper.GetBool("anthropic.bedrock"),
-		viper.GetBool("tls.extra-certs"),
 		viper.GetString("tls.certs-path")
 	effortPtr := new(effort)
 
 	var bedrockConfig *models.BedrockConfig
 	if bedrockModel {
-		c, err := models.NewBedrockConfig(extraCerts, certsPath)
+		c, err := models.NewBedrockConfig(certsPath)
 		if err != nil {
 			log.Fatalf("error creating bedrock config: %v", err)
 		}
@@ -208,7 +201,6 @@ func runTUI(_ *cobra.Command, _ []string) {
 	}
 
 	// Run TUI application
-	zone.NewGlobal()
 	tui := tui.NewTUI(
 		model,
 		systemPrompt,

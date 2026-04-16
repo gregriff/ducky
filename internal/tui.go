@@ -6,18 +6,17 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/cursor"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/gregriff/ducky/internal/chat"
-	"github.com/gregriff/ducky/internal/math"
 	"github.com/gregriff/ducky/internal/models"
 	"github.com/gregriff/ducky/internal/models/anthropic"
 	"github.com/gregriff/ducky/internal/models/openai"
 	styles "github.com/gregriff/ducky/internal/styles"
-	zone "github.com/lrstanley/bubblezone/v2"
 	"github.com/muesli/reflow/wordwrap"
 )
 
@@ -73,12 +72,15 @@ func NewTUI(
 ) *model {
 	// create and style textarea
 	ta := textarea.New()
+	ta.DynamicHeight = true
+	ta.MinHeight = styles.TA_HEIGHT_COLLAPSED // Minimum visible rows
+	ta.MaxHeight = styles.TA_HEIGHT_NORMAL    // Maximum visible rows
+	ta.MaxContentHeight = 1000                // Maximum rows of content
+
 	ta.ShowLineNumbers = false
 	ta.KeyMap.InsertNewline.SetEnabled(false) // TODO: need this to be bound to shift+enter
 	ta.Placeholder = "Send a prompt..."
 
-	// ta.Styles.Focused.Placeholder = styles.TUIStyles.PromptText
-	// ta.Styles.Focused.CursorLine = styles.TUIStyles.TextAreaCursor
 	taS := ta.Styles()
 	taS.Focused.Placeholder = styles.TUIStyles.PromptText
 	taS.Focused.CursorLine = styles.TUIStyles.TextAreaCursor
@@ -132,7 +134,7 @@ func (m *model) Init() tea.Cmd {
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var spCmd, vpCmd tea.Cmd
 
-	// log.Printf("\n\nMESSAGE RECEIVED: %#v", msg)
+	// log.Printf("MESSAGE RECEIVED: %#v\n", msg)
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -143,6 +145,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "ctrl+c":
 			return m.handleCtrlC()
+		case "ctrl+l":
+			return m.handleCtrlL()
 		case "esc":
 			return m.handleEscape()
 		case "up", "down":
@@ -168,20 +172,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.isStreaming { // don't allow paste while streaming
 			return m, nil
 		}
-		// grab the paste message before textarea gets it, in order to increase
-		// the height of the textarea if the pasted text has many lines
-		m.handlePaste(msg)
+		// paste will be passed to textarea
 	case tea.MouseMsg:
 		switch msg := msg.(type) {
 		case tea.MouseClickMsg:
 			return m.handleClick(msg)
-
+		case tea.MouseReleaseMsg:
+			return m, nil
 		case tea.MouseWheelMsg:
-			m, scrollCmd := m.handleScroll(msg)
-			if scrollCmd == nil {
-				break
-			}
-			return m, scrollCmd
+			return m.handleScroll(msg)
 		}
 
 	case tea.BlurMsg:
@@ -228,9 +227,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// prevent movement keys from scrolling the viewport
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.Key().Text {
-		case "d", "u", "b", "j", "k":
+		case "d", "u", "b", "j", "k",
+			"ctrl+d", "ctrl+u", "ctrl+b", "ctrl+j", "ctrl+k":
 			return m, nil
 		}
+	}
+
+	// ignore keys that would move the viewport by a single line
+	if msg, ok := msg.(tea.KeyPressMsg); ok {
+		switch msg.String() {
+		case "ctrl+d", "ctrl+u", "ctrl+b", "ctrl+j", "ctrl+k":
+			return m, nil
+		}
+	}
+
+	if _, ok := msg.(cursor.BlinkMsg); ok {
+		return m, nil
 	}
 
 	m.viewport, vpCmd = m.viewport.Update(msg)
@@ -254,16 +266,9 @@ func (m *model) resizeComponents(windowWidth, textAreaWidth, viewportHeight int)
 }
 
 // getResizeParams returns size dimensions of on-screen components needed during redrawing or resizing.
-func (m *model) getResizeParams(windowHeight, windowWidth int, taHeight *int) (viewportHeight int, textAreaWidth int) {
-	var textAreaHeight int
-	if taHeight != nil {
-		textAreaHeight = *taHeight
-	} else {
-		textAreaHeight = m.textarea.Height()
-	}
-
-	headerHeight := lipgloss.Height(m.headerView(m.viewport.Width()))
-	verticalMarginHeight := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
+func (m *model) getResizeParams(windowHeight, windowWidth int) (viewportHeight int, textAreaWidth int) {
+	headerHeight := lipgloss.Height(m.headerView())
+	verticalMarginHeight := headerHeight + m.textarea.Height() + styles.VP_TA_SPACING_SIZE
 
 	viewportHeight = windowHeight - verticalMarginHeight
 	textAreaWidth = windowWidth - styles.H_PADDING
@@ -273,7 +278,7 @@ func (m *model) getResizeParams(windowHeight, windowWidth int, taHeight *int) (v
 func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.windowSize = msg
 	windowHeight, windowWidth := msg.Height, msg.Width
-	viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, nil)
+	viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth)
 
 	var taCmd, vpCmd tea.Cmd
 	// TODO: should be able to move this into constructor, and style Viewport with vp.Style
@@ -282,6 +287,7 @@ func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.viewport.MouseWheelDelta = 2 // TODO: make this configurable
 		m.viewport.SetContent(m.chat.Render(windowWidth))
 		m.viewport.GotoBottom()
+		// vp.LeftGutterFunc = func(info viewport.GutterContext) ...
 		m.textarea.MaxWidth = textAreaWidth
 		m.textarea.SetWidth(textAreaWidth)
 		m.textarea.MaxHeight = viewportHeight / 2
@@ -293,6 +299,7 @@ func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.textarea.MaxHeight = viewportHeight / 2
+
 	m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
 	m.viewport, vpCmd = m.viewport.Update(msg)
 	m.textarea, taCmd = m.textarea.Update(msg)
@@ -322,7 +329,6 @@ func (m *model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.chat.AddPrompt(prompt)
 	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 	m.viewport.GotoBottom()
-	m.textarea.SetHeight(styles.TA_HEIGHT_COLLAPSED)
 
 	m.streamCtx, m.stopStreaming = context.WithCancel(context.Background())
 	beginStreaming := func() tea.Msg {
@@ -445,9 +451,15 @@ func (m *model) handleScroll(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.textarea.Focused() {
+		// TODO: cache this with sha1, scrolling large TA is laggy.
 		wrappedLineCount := m.getNumLines(m.textarea.Value())
 		taHeight := m.textarea.Height()
+
+		// if there is not enough text in the TA to scroll it, OR
+		// the TA is collapsed, scroll the viewport.
+		// NOTE: this may be responsible for text flickering in the VP.
 		if wrappedLineCount < taHeight || taHeight == styles.TA_HEIGHT_COLLAPSED {
+			// NOTE: why do we not pass scrollKey here?
 			m.viewport, scrollCmd = m.viewport.Update(msg)
 		} else {
 			m.textarea, scrollCmd = m.textarea.Update(scrollKey)
@@ -472,7 +484,7 @@ func (m *model) handleEscape() (tea.Model, tea.Cmd) {
 			return m, m.redraw
 		}
 	} else if !m.isStreaming {
-		return m, tea.Batch(m.textarea.Focus(), m.redraw)
+		return m, tea.Sequence(m.textarea.Focus(), m.redraw)
 		// if numLines > curHeight:
 		// 		if numLines > normal, set height to min(numLines, maxHeight)
 		// 		else set height to normal
@@ -489,6 +501,17 @@ func (m *model) handleCtrlC() (tea.Model, tea.Cmd) {
 	if m.chat.HistoryLen() == 0 {
 		return m, tea.Quit
 	}
+	return m.clearChatHistory()
+}
+
+func (m *model) handleCtrlL() (tea.Model, tea.Cmd) {
+	if m.isStreaming || m.chat.HistoryLen() == 0 {
+		return m, nil
+	}
+	return m.clearChatHistory()
+}
+
+func (m *model) clearChatHistory() (tea.Model, tea.Cmd) {
 	m.chat.Clear() // print something
 	m.llm.ClearChatHistory()
 	m.forceHeaderRefresh = true
@@ -521,7 +544,11 @@ func (m *model) handleClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if zone.Get("chatViewport").InBounds(msg) {
+	// NOTE: should refactor this logic.
+	// TODO: clicking title bar is not handled
+
+	// if the click is inside the viewport
+	if msg.Y < m.windowSize.Height-m.textarea.Height() {
 		if m.chat.HistoryLen() == 0 {
 			return m, nil
 		}
@@ -532,31 +559,17 @@ func (m *model) handleClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 			m.viewport, vpCmd = m.viewport.Update(msg)
 			return m, vpCmd
 		}
-	} else if zone.Get("promptInput").InBounds(msg) {
+
+		// user has clicked the viewport and TA is not focused.
 		if !m.textarea.Focused() {
-			return m, m.textarea.Focus()
+			return m, nil
 		}
 	}
 
 	if m.textarea.Focused() {
-		return m.updateTextarea(msg)
+		return m, nil // don't send click if its already selected
 	}
-
-	m.viewport, vpCmd = m.viewport.Update(msg)
-	return m, vpCmd
-}
-
-func (m *model) handlePaste(msg tea.PasteMsg) {
-	// content, _ := clipboard.ReadAll()
-	wrappedLineCount := m.getNumLines(msg.Content)
-	if wrappedLineCount > m.textarea.Height() {
-		newHeight := math.Clamp(wrappedLineCount, styles.TA_HEIGHT_NORMAL, m.textarea.MaxHeight)
-		windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
-		viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
-
-		m.textarea.SetHeight(newHeight) // this func clamps
-		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
-	}
+	return m, m.textarea.Focus()
 }
 
 // allowScrollback checks the cursor position in the textarea and returns whether triggering a scrollback action can take place.
@@ -595,40 +608,28 @@ func (m *model) allowScrollback(keyString string) bool {
 	return true
 }
 
-// updateTextarea sends any message to the textarea. It also handles resizing the textarea if the text changes.
+// updateTextarea sends any message to the textarea.
 func (m *model) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg == nil {
 		return m, nil
 	}
+	var taCmd tea.Cmd
 
-	var (
-		newHeight int
-		taCmd     tea.Cmd
-	)
-	expanded, collapsed := styles.TA_HEIGHT_NORMAL, styles.TA_HEIGHT_COLLAPSED
-	if m.textarea.Length() > 0 {
-		if m.textarea.Height() < expanded {
-			newHeight = expanded
-		} else if numLines := m.getNumLines(m.textarea.Value()); numLines >= expanded {
-			newHeight = math.Clamp(numLines, expanded, m.textarea.MaxHeight)
-		}
-	} else if m.textarea.Height() > collapsed {
-		newHeight = collapsed
-	}
-
-	// set height of textarea, updating viewport first to prevent visual glitching
-	if newHeight != 0 {
-		windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
-		viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth, &newHeight)
-
-		m.textarea.SetHeight(newHeight)
-		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
-	}
+	// TODO: this redraw block needs to be prevented for most msgs.
+	// figure out which msgs require it (resize only) and whitelist that
+	// instead of blacklisting.
+	lastTaHeight := m.textarea.Height()
 
 	// This runs when the textarea is focused and not being resized.
 	// NOTE: this prevents messages from reaching the viewport, which may not be desirable
 	// ensure we aren't returning nil above these lines and therefore blocking messages to these models
 	m.textarea, taCmd = m.textarea.Update(msg)
+
+	if m.textarea.Height() != lastTaHeight {
+		windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
+		viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth)
+		m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
+	}
 	return m, taCmd
 }
 
@@ -671,20 +672,22 @@ func (m *model) View() tea.View {
 	}
 
 	m.contentBuilder.Reset()
-	m.contentBuilder.WriteString(
-		zone.Scan(
-			m.headerView(m.viewport.Width()) + "\n" +
-				zone.Mark("chatViewport", m.viewport.View()) + "\n" +
-				zone.Mark("promptInput", styles.VP_TA_SPACING+m.textarea.View()),
-		))
+	m.contentBuilder.WriteString(m.headerView())
+	m.contentBuilder.WriteString("\n")
+	m.contentBuilder.WriteString(m.viewport.View())
+	m.contentBuilder.WriteString("\n")
+	m.contentBuilder.WriteString(styles.VP_TA_SPACING)
+	m.contentBuilder.WriteString(m.textarea.View())
 	v.SetContent(m.contentBuilder.String())
 	return v
 }
 
 // headerView returns the formatted header, reusing the last computed headerView result if the width hasn't changed and the spinner doesn't
 // need to be updated.
-func (m *model) headerView(width int) string {
+func (m *model) headerView() string {
 	var leftText string
+	width := m.viewport.Width()
+
 	if !m.isStreaming {
 		if width == m.lastWidth && !m.forceHeaderRefresh {
 			return m.headerBuilder.String()
@@ -700,7 +703,7 @@ func (m *model) headerView(width int) string {
 		m.forceHeaderRefresh = false
 	}
 
-	rightText := m.llm.ModelId()
+	rightText := m.llm.ModelInfoText()
 	if cost := models.FormattedCost(m.llm); cost != "" {
 		rightText += " (" + cost + ")"
 	}

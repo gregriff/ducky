@@ -5,10 +5,13 @@
 Ducky provides the most ergonomic LLM chat interface for developers. With a minimal UX inspired by text messaging apps, ducky lets you access most powerful LLMs from within the terminal.
 
 ### Installation
+- `go install github.com/gregriff/ducky`
+
+**Note:**
+I don't always tag releases, so to get the latest:
 1. `git clone https://github.com/gregriff/ducky.git`
 2. `cd ducky`
 3. `go install .`
-> Note: this installation process is required because I use a custom fork of `termenv`.
 
 ### Usage
 `ducky run [model name]`

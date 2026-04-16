@@ -22,6 +22,7 @@ type model struct {
 	// be updated after each response stream completes, using current model's pricing.
 	// should be reset on clear
 	totalCost float64
+	bedrock   bool
 }
 
 // NewModel creates a new Anthropic Model to be used for response streaming.
@@ -43,7 +44,6 @@ func NewModel(
 	var opts []option.RequestOption
 	var err error
 	if bedrockConfig != nil {
-		modelName += "-bedrock"
 		opts, err = buildBedrockConfig(context.TODO(), bedrockConfig, opts)
 		if err != nil {
 			return nil, err
@@ -61,6 +61,7 @@ func NewModel(
 		client:             client, // by default uses os.LookupEnv("ANTHROPIC_API_KEY") TODO: use viper config var
 		props:              modelProperties[modelName],
 		systemPromptObject: []anthropic.TextBlockParam{{Text: systemPrompt}},
+		bedrock:            bedrockConfig != nil,
 	}
 	return m, nil
 }
@@ -89,8 +90,13 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
 	}
 
+	modelId := llm.ModelId()
+	if llm.bedrock {
+		modelId = "us.anthropic" + modelId // this isn't a great solution.
+	}
+
 	stream := llm.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(llm.props.id),
+		Model:     anthropic.Model(modelId),
 		System:    llm.systemPromptObject,
 		MaxTokens: maxTokens,
 		Messages:  llm.buildMessages(content),
@@ -181,6 +187,15 @@ func (llm *model) ChatHistory() []models.Message {
 
 func (llm *model) ModelId() string {
 	return llm.props.id
+}
+
+func (llm *model) ModelInfoText() string {
+	if llm.bedrock {
+		return "[bedrock] " + llm.props.name
+		// return lipgloss.NewStyle().
+		// Foreground(lipgloss.Color("21")).Render("[bedrock]") + " " + llm.ModelId()
+	}
+	return llm.props.name
 }
 
 func (llm *model) SupportsReasoning() bool {

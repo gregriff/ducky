@@ -184,6 +184,10 @@ func (llm *model) ModelId() string {
 	return llm.props.id
 }
 
+func (llm *model) ModelInfoText() string {
+	return llm.ModelId()
+}
+
 func (llm *model) SupportsReasoning() bool {
 	if reasoning := llm.props.supportsReasoning; reasoning != nil && *reasoning {
 		return true

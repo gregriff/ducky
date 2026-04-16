@@ -1,14 +1,22 @@
 ## TODO List
 
 #### High Priority
+- markdown text flickers when scrolling text in textarea input viewport. 
+- FLICKERING: caused by redraw. getResizeParams? figure it out. any msg that triggers a redraw will flicker the colors. resizeComponents???!!! def whitelist events. this will stop blinkCanceled from doing it. whitelist keypress and try to debug what esc code is making this happen (custom glamour style?)
+- replace full bedrock model name with `[region (red)] [short id]`
 - capture CTRL+Enter for newline in prompt
-- ctrl+L clears
+- add tests for scrollback and other functionaltiy
+- test using tea.sequence instead of batch for vp+ta updates and any other redraw stuff. 
+- check out lipgloss's compositor
+- allow customization of lipgloss.TabWidth for md rendering
+- pasting many lines of text should not result in only last line of text being shown, but Ideally, dont even show text, replace it with a CC-like stub (ideally clickable, triggering a bubbles popup with it formatted). 
+- when TA is full of text and able to be scrolled, ESC to focus VP, scroll VP, then ESC to focus TA. this will inc. or dec. TA height by 1. It will alternate heights between 2 ints. This does not happen when clicking them to focus them. Could be not returning early in the ESC focus path? 
+- use fzf tmux scrolling behavior as reference. But first, test the textara bubble outside of ducky, to see its full capabilities and ensure you're using all of its features. 
 - command bar, can switch effort level. make effort cli arg apply to latest sonnet.
 - command to save cur convo as raw markdown to a file. 
 - collapse text from a large paste into a little button, denoting the # lines pasted. 
 - I THINK PASTING IS CAUSING SLOWDOWN: sluggishness after many prompts, textarea not responsive and eats 90MB and 12% CPU
 - sql from SQL_BUG.txt, if pasted into prompt, freezes entire program
-- look into sonnet 4-6 config to lower costs, it seems to be doing multi-shot on its own for complex programming prompts
   ==> REASONING EFFORT: incp. this into anthropic models, its already with openai models
 - unload far away text from screen buffer and keep in chat-entries to be lazy loaded once scroll area is near it again: 
   - print m.viewport.YOffset() to debug scroll pos
@@ -26,7 +34,7 @@
 - scrollback history is not preserved after clearing history. Fix this by adding an `entireHistory` field to chat.Model, where `history` is initially this same slice, but after a CLEAR HISTORY, it becomes a re-slice of `entireHistory`. only the scrollback functionality should use `entireHistory`. refer to book page 67 when implementing this
 
 #### Refactors:
-- rethink LLM interface design, middle layer not needed?
+- n/a
 
 #### UI:
 - only show cost when holding settings key
