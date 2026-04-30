@@ -92,7 +92,7 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 
 	modelId := llm.ModelId()
 	if llm.bedrock {
-		modelId = "us.anthropic" + modelId // this isn't a great solution.
+		modelId = "us.anthropic." + modelId // this isn't a great solution.
 	}
 
 	stream := llm.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
