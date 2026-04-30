@@ -1,8 +1,7 @@
 ## TODO List
 
 #### High Priority
-- markdown text flickers when scrolling text in textarea input viewport. 
-- FLICKERING: caused by redraw. getResizeParams? figure it out. any msg that triggers a redraw will flicker the colors. resizeComponents???!!! def whitelist events. this will stop blinkCanceled from doing it. whitelist keypress and try to debug what esc code is making this happen (custom glamour style?)
+- textarea sizing currently done on every taCmd (keyclick etc.). slow/double resize on esc, but working. MaxHeight should be the only thing that determines this. would be nice to have a way to listen for dynamic height changes but looks like that happens internal to textarea...
 - replace full bedrock model name with `[region (red)] [short id]`
 - capture CTRL+Enter for newline in prompt
 - add tests for scrollback and other functionaltiy

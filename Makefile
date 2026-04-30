@@ -1,3 +1,5 @@
+export CGO_ENABLED=0
+
 run:
 	DEBUG=1 go run . run haiku --pprof=localhost:6060
 
