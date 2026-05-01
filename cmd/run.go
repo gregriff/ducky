@@ -194,7 +194,7 @@ func runTUI(_ *cobra.Command, _ []string) {
 
 			// print streaming err if any.
 			if err := g.Wait(); err != nil {
-				fmt.Fprintln(os.Stderr, err.Error())
+				_, _ = fmt.Fprintln(os.Stderr, err.Error())
 			}
 			return
 		}
