@@ -1,6 +1,7 @@
 ## TODO List
 
 #### High Priority
+- text blinking still happening. need to add back resize whitelist to updateTextarea
 - expand TA, redraw on paste
 - CTRL+XE to open prompt in $EDITOR
 - textarea sizing currently done on every taCmd (keyclick etc.). slow/double resize on esc, but working. MaxHeight should be the only thing that determines this. would be nice to have a way to listen for dynamic height changes but looks like that happens internal to textarea...

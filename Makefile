@@ -3,6 +3,9 @@ export CGO_ENABLED=0
 run:
 	DEBUG=1 go run . run haiku --pprof=localhost:6060
 
+test:
+	echo "explain parallelism in go quickly" | DEBUG=1 go run . run haiku --pprof=localhost:6060 --force-interactive=true
+
 install:
 	go install
 

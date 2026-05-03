@@ -4,7 +4,6 @@ package internal
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"charm.land/bubbles/v2/cursor"
@@ -14,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/gregriff/ducky/internal/chat"
+	"github.com/gregriff/ducky/internal/math"
 	"github.com/gregriff/ducky/internal/models"
 	"github.com/gregriff/ducky/internal/models/anthropic"
 	"github.com/gregriff/ducky/internal/models/openai"
@@ -73,10 +73,10 @@ func NewTUI(
 ) *model {
 	// create and style textarea
 	ta := textarea.New()
-	ta.DynamicHeight = true
-	ta.MinHeight = styles.TA_HEIGHT_COLLAPSED // Minimum visible rows
-	ta.MaxHeight = styles.TA_HEIGHT_NORMAL    // Maximum visible rows
-	ta.MaxContentHeight = 1000                // Maximum rows of content
+	ta.DynamicHeight = false
+	// ta.MinHeight = styles.TA_HEIGHT_COLLAPSED // Minimum visible rows
+	// ta.MaxHeight = styles.TA_HEIGHT_NORMAL    // Maximum visible rows
+	// ta.MaxContentHeight = 1000                // Maximum rows of content
 
 	ta.ShowLineNumbers = false
 	ta.KeyMap.InsertNewline.SetEnabled(false) // TODO: need this to be bound to shift+enter
@@ -174,6 +174,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// paste will be passed to textarea
+		m.handlePaste(msg)
 	case tea.MouseMsg:
 		switch msg := msg.(type) {
 		case tea.MouseClickMsg:
@@ -214,7 +215,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, spCmd
 
 	case tea.WindowSizeMsg:
-		return m.handleWindowResize(msg)
+		// return m.handleWindowResize(msg)
+		m.handleWindowResize(msg)
+		return m, nil
+
+	case cursor.BlinkMsg:
+		var cmd tea.Cmd
+		m.textarea, cmd = m.textarea.Update(msg)
+		return m, cmd
 	}
 
 	// TODO: resizing window while textarea is not focused may prevent textarea resizing until it is focused
@@ -241,10 +249,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if _, ok := msg.(cursor.BlinkMsg); ok {
-		return m, nil
-	}
-
 	m.viewport, vpCmd = m.viewport.Update(msg)
 	return m, vpCmd
 }
@@ -255,45 +259,38 @@ func (m *model) redraw() tea.Msg {
 }
 
 // resizeComponents sets size properties on the viewport and textarea.
-func (m *model) resizeComponents(windowWidth, textAreaWidth, viewportHeight int) {
+func (m *model) resizeComponents(windowWidth, vpHeight int) {
 	m.viewport.SetWidth(windowWidth)
-	m.viewport.SetHeight(viewportHeight)
+	m.viewport.SetHeight(vpHeight)
 
-	m.textarea.MaxWidth = textAreaWidth
-	m.textarea.SetWidth(textAreaWidth)
+	m.textarea.MaxWidth = windowWidth
+	m.textarea.SetWidth(windowWidth) // ta.Width will be less than this cuz of the prompt.
 
 	m.viewport.SetContent(m.chat.Render(windowWidth))
 }
 
-// getResizeParams returns size dimensions of on-screen components needed during redrawing or resizing.
-func (m *model) getResizeParams(windowHeight, windowWidth int) (int, int) {
+// calcViewportHeight calculates the height of the viewport for the next screen draw.
+// It accepts an optional taHeight, which is passed when the textarea needs to be resized and
+// its next height has been calculated.
+func (m *model) calcViewportHeight(windowHeight int, taHeight *int) int {
+	var textAreaHeight int
+	if taHeight != nil {
+		textAreaHeight = *taHeight
+	} else {
+		textAreaHeight = m.textarea.Height()
+	}
+
 	headerHeight := lipgloss.Height(m.headerView())
+	reservedSpace := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
 
-	// TODO: prob need to fix this min().
-	// also, taHeight not returned anymore... could return it and set it in resizehandler.
-	taHeight := min(m.textarea.Height(), m.textarea.MaxHeight)
-	reservedHeight := headerHeight + taHeight + styles.VP_TA_SPACING_SIZE
-	vpHeight := windowHeight - reservedHeight
-
-	taWidth := windowWidth - styles.H_PADDING
-	return vpHeight, taWidth
+	// log.Printf("grp: w=%d, ta=%d, vp=%d, h=%d, r=%d", windowHeight, textAreaHeight, viewportHeight, headerHeight, reservedSpace)
+	return windowHeight - reservedSpace
 }
 
 func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.windowSize = msg
 	windowHeight, windowWidth := msg.Height, msg.Width
-	log.Println("windowResizeHandler")
-
-	if m.textarea.Focused() {
-		if m.textarea.Length() > 0 && m.chat.HistoryLen() > 0 {
-			m.textarea.MaxHeight = m.windowSize.Height / 2
-		}
-	} else {
-		m.textarea.MaxHeight = styles.TA_HEIGHT_NORMAL
-	}
-
-	viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth)
-	// m.textarea.MaxHeight = textAreaHeight
+	viewportHeight := m.calcViewportHeight(windowHeight, nil)
 
 	var taCmd, vpCmd tea.Cmd
 	// TODO: should be able to move this into constructor, and style Viewport with vp.Style
@@ -302,9 +299,9 @@ func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.viewport.MouseWheelDelta = 2 // TODO: make this configurable
 		m.viewport.SetContent(m.chat.Render(windowWidth))
 		m.viewport.GotoBottom()
-		// vp.LeftGutterFunc = func(info viewport.GutterContext) ...
-		m.textarea.MaxWidth = textAreaWidth
-		m.textarea.SetWidth(textAreaWidth)
+		m.textarea.MaxWidth = windowWidth
+		m.textarea.SetWidth(windowWidth)
+		m.textarea.MaxHeight = viewportHeight / 2
 		m.ready = true
 
 		m.viewport, vpCmd = m.viewport.Update(msg)
@@ -312,7 +309,8 @@ func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(taCmd, vpCmd)
 	}
 
-	m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
+	m.textarea.MaxHeight = viewportHeight / 2
+	m.resizeComponents(windowWidth, viewportHeight)
 	m.viewport, vpCmd = m.viewport.Update(msg)
 	m.textarea, taCmd = m.textarea.Update(msg)
 	return m, tea.Batch(taCmd, vpCmd)
@@ -341,6 +339,7 @@ func (m *model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.chat.AddPrompt(prompt)
 	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 	m.viewport.GotoBottom()
+	m.textarea.SetHeight(styles.TA_HEIGHT_COLLAPSED)
 
 	m.streamCtx, m.stopStreaming = context.WithCancel(context.Background())
 	beginStreaming := func() tea.Msg {
@@ -434,6 +433,19 @@ func (m *model) handleStreamError(msg models.StreamError) (tea.Model, tea.Cmd) {
 	return m, m.waitForNextChunk // ensure last chunk is read and let chunk and complete messages handle state
 }
 
+func (m *model) handlePaste(msg tea.PasteMsg) {
+	// content, _ := clipboard.ReadAll()
+	wrappedLineCount := m.getNumLines(msg.Content)
+	if wrappedLineCount > m.textarea.Height() {
+		newHeight := math.Clamp(wrappedLineCount, styles.TA_HEIGHT_NORMAL, m.textarea.MaxHeight)
+		windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
+		viewportHeight := m.calcViewportHeight(windowHeight, &newHeight)
+
+		m.textarea.SetHeight(newHeight) // this func clamps
+		m.resizeComponents(windowWidth, viewportHeight)
+	}
+}
+
 func (m *model) handleScroll(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	var (
 		scrollCmd     tea.Cmd
@@ -497,11 +509,15 @@ func (m *model) handleEscape() (tea.Model, tea.Cmd) {
 			if m.textarea.Height() > styles.TA_HEIGHT_NORMAL {
 				m.textarea.MaxHeight = styles.TA_HEIGHT_NORMAL
 			}
-			return m, m.redraw
+			m.handleWindowResize(m.windowSize)
+			return m, nil
+			// return m, m.redraw
 		}
 	} else if !m.isStreaming {
 		m.textarea.MaxHeight = m.windowSize.Height / 2
-		return m, tea.Batch(m.textarea.Focus(), m.redraw)
+		// return m, tea.Sequence(m.textarea.Focus(), m.redraw)
+		m.handleWindowResize(m.windowSize)
+		return m, m.textarea.Focus()
 	}
 	return m, nil
 }
@@ -626,30 +642,40 @@ func (m *model) allowScrollback(keyString string) bool {
 	return true
 }
 
-// updateTextarea sends any message to the textarea.
+// updateTextarea sends any message to the textarea. It also handles resizing the textarea if the text changes.
 func (m *model) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg == nil {
 		return m, nil
 	}
-	var taCmd tea.Cmd
-	// log.Printf("taCmd: %#v", msg)
 
-	// TODO: this redraw block needs to be prevented for most msgs.
-	// figure out which msgs require it (resize only) and whitelist that
-	// instead of blacklisting.
-	// lastTaHeight := m.textarea.Height()
+	var (
+		newHeight int
+		taCmd     tea.Cmd
+	)
+	expanded, collapsed := styles.TA_HEIGHT_NORMAL, styles.TA_HEIGHT_COLLAPSED
+	if m.textarea.Length() > 0 {
+		if m.textarea.Height() < expanded {
+			newHeight = expanded
+		} else if numLines := m.getNumLines(m.textarea.Value()); numLines >= expanded {
+			newHeight = math.Clamp(numLines, expanded, m.textarea.MaxHeight)
+		}
+	} else if m.textarea.Height() > collapsed {
+		newHeight = collapsed
+	}
+
+	// set height of textarea, updating viewport first to prevent visual glitching
+	if newHeight != 0 {
+		windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
+		viewportHeight := m.calcViewportHeight(windowHeight, &newHeight)
+
+		m.textarea.SetHeight(newHeight)
+		m.resizeComponents(windowWidth, viewportHeight)
+	}
 
 	// This runs when the textarea is focused and not being resized.
 	// NOTE: this prevents messages from reaching the viewport, which may not be desirable
 	// ensure we aren't returning nil above these lines and therefore blocking messages to these models
 	m.textarea, taCmd = m.textarea.Update(msg)
-
-	// if m.textarea.Height() != lastTaHeight {
-	// 	log.Println("resizing b/c of taHeight change during update")
-	windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
-	viewportHeight, textAreaWidth := m.getResizeParams(windowHeight, windowWidth)
-	m.resizeComponents(windowWidth, textAreaWidth, viewportHeight)
-	// }
 	return m, taCmd
 }
 
