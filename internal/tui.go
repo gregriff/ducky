@@ -32,10 +32,13 @@ type model struct {
 	initialPrompt   string // if stdin is a pipe and --force-interactive is used
 
 	// UI state
-	ready      bool
-	textarea   textarea.Model
-	viewport   viewport.Model
-	spinner    spinner.Model
+	ready    bool
+	textarea textarea.Model
+	viewport viewport.Model
+	spinner  spinner.Model
+
+	// windowSize stores the current window dimensions. It should be updated
+	// as soon as a windowSizeMsg comes in.
 	windowSize tea.WindowSizeMsg
 
 	// Chat state
@@ -259,20 +262,21 @@ func (m *model) redraw() tea.Msg {
 }
 
 // resizeComponents sets size properties on the viewport and textarea.
-func (m *model) resizeComponents(windowWidth, vpHeight int) {
+func (m *model) resizeComponents(vpHeight int) {
+	windowWidth := m.windowSize.Width
+
 	m.viewport.SetWidth(windowWidth)
 	m.viewport.SetHeight(vpHeight)
+	m.viewport.SetContent(m.chat.Render(windowWidth))
 
 	m.textarea.MaxWidth = windowWidth
 	m.textarea.SetWidth(windowWidth) // ta.Width will be less than this cuz of the prompt.
-
-	m.viewport.SetContent(m.chat.Render(windowWidth))
 }
 
 // calcViewportHeight calculates the height of the viewport for the next screen draw.
 // It accepts an optional taHeight, which is passed when the textarea needs to be resized and
 // its next height has been calculated.
-func (m *model) calcViewportHeight(windowHeight int, taHeight *int) int {
+func (m *model) calcViewportHeight(taHeight *int) int {
 	var textAreaHeight int
 	if taHeight != nil {
 		textAreaHeight = *taHeight
@@ -282,35 +286,29 @@ func (m *model) calcViewportHeight(windowHeight int, taHeight *int) int {
 
 	headerHeight := lipgloss.Height(m.headerView())
 	reservedSpace := headerHeight + textAreaHeight + styles.VP_TA_SPACING_SIZE
-
-	// log.Printf("grp: w=%d, ta=%d, vp=%d, h=%d, r=%d", windowHeight, textAreaHeight, viewportHeight, headerHeight, reservedSpace)
-	return windowHeight - reservedSpace
+	return m.windowSize.Height - reservedSpace
 }
 
 func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.windowSize = msg
-	windowHeight, windowWidth := msg.Height, msg.Width
-	viewportHeight := m.calcViewportHeight(windowHeight, nil)
+	viewportHeight := m.calcViewportHeight(nil)
+	m.textarea.MaxHeight = viewportHeight / 2
 
 	var taCmd, vpCmd tea.Cmd
 	// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 	if !m.ready {
+		windowWidth := msg.Width
 		m.viewport = viewport.New(viewport.WithWidth(windowWidth), (viewport.WithHeight(viewportHeight)))
 		m.viewport.MouseWheelDelta = 2 // TODO: make this configurable
 		m.viewport.SetContent(m.chat.Render(windowWidth))
 		m.viewport.GotoBottom()
 		m.textarea.MaxWidth = windowWidth
 		m.textarea.SetWidth(windowWidth)
-		m.textarea.MaxHeight = viewportHeight / 2
 		m.ready = true
-
-		m.viewport, vpCmd = m.viewport.Update(msg)
-		m.textarea, taCmd = m.textarea.Update(msg)
-		return m, tea.Batch(taCmd, vpCmd)
+	} else {
+		m.resizeComponents(viewportHeight)
 	}
 
-	m.textarea.MaxHeight = viewportHeight / 2
-	m.resizeComponents(windowWidth, viewportHeight)
 	m.viewport, vpCmd = m.viewport.Update(msg)
 	m.textarea, taCmd = m.textarea.Update(msg)
 	return m, tea.Batch(taCmd, vpCmd)
@@ -438,11 +436,10 @@ func (m *model) handlePaste(msg tea.PasteMsg) {
 	wrappedLineCount := m.getNumLines(msg.Content)
 	if wrappedLineCount > m.textarea.Height() {
 		newHeight := math.Clamp(wrappedLineCount, styles.TA_HEIGHT_NORMAL, m.textarea.MaxHeight)
-		windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
-		viewportHeight := m.calcViewportHeight(windowHeight, &newHeight)
+		viewportHeight := m.calcViewportHeight(&newHeight)
 
 		m.textarea.SetHeight(newHeight) // this func clamps
-		m.resizeComponents(windowWidth, viewportHeight)
+		m.resizeComponents(viewportHeight)
 	}
 }
 
@@ -665,11 +662,10 @@ func (m *model) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// set height of textarea, updating viewport first to prevent visual glitching
 	if newHeight != 0 {
-		windowHeight, windowWidth := m.windowSize.Height, m.windowSize.Width
-		viewportHeight := m.calcViewportHeight(windowHeight, &newHeight)
+		viewportHeight := m.calcViewportHeight(&newHeight)
 
 		m.textarea.SetHeight(newHeight)
-		m.resizeComponents(windowWidth, viewportHeight)
+		m.resizeComponents(viewportHeight)
 	}
 
 	// This runs when the textarea is focused and not being resized.
