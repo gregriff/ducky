@@ -272,7 +272,13 @@ func (m *model) resizeComponents() {
 	m.viewport.SetHeight(vpHeight)
 	m.viewport.SetContent(m.chat.Render(windowWidth))
 
-	m.textarea.MaxHeight = vpHeight / 2
+	if m.textarea.Focused() {
+		m.textarea.MaxHeight = vpHeight / 2
+	} else {
+		m.textarea.MaxHeight = styles.TA_HEIGHT_NORMAL
+	}
+	// TODO: m.setTextareaHeight(...) <- clamping on maxHeight
+	// TODO: move entire text into view?
 	m.textarea.MaxWidth = windowWidth
 	m.textarea.SetWidth(windowWidth) // ta.Width will be less than this cuz of the prompt.
 
@@ -281,7 +287,6 @@ func (m *model) resizeComponents() {
 }
 
 func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
-	// TODO: if msg == m.windowSize, return m, nil
 	m.windowSize = msg
 
 	var taCmd, vpCmd tea.Cmd
@@ -483,25 +488,20 @@ func (m *model) handleScroll(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) handleEscape() (tea.Model, tea.Cmd) {
-	// m.viewport.GotoBottom()
-	// m.lastManualGoToBottom = time.Now()
 	if m.textarea.Focused() {
 		if m.textarea.Length() > 0 && m.chat.HistoryLen() > 0 {
 			m.textarea.Blur()
 
 			// no need to keep textarea very large when user is trying to scroll the viewport
 			if m.textarea.Height() > styles.TA_HEIGHT_NORMAL {
-				m.textarea.MaxHeight = styles.TA_HEIGHT_NORMAL
+				m.textarea.SetHeight(styles.TA_HEIGHT_NORMAL)
 			}
-			// return m.handleWindowResize(m.windowSize)
-			// return m, nil
 			return m, m.redraw
 		}
 	} else if !m.isStreaming {
-		m.textarea.MaxHeight = m.windowSize.Height / 2
-		return m, tea.Batch(m.textarea.Focus(), m.redraw)
-		// m.handleWindowResize(m.windowSize)
-		// return m, m.textarea.Focus()
+		newHeight := math.Clamp(m.textarea.Height(), styles.TA_HEIGHT_COLLAPSED, m.textarea.MaxHeight)
+		m.textarea.SetHeight(newHeight)
+		return m, tea.Sequence(m.textarea.Focus(), m.redraw)
 	}
 	return m, nil
 }
@@ -638,11 +638,8 @@ func (m *model) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 	expanded, collapsed := styles.TA_HEIGHT_NORMAL, styles.TA_HEIGHT_COLLAPSED
 	if m.textarea.Length() > 0 {
-		if m.textarea.Height() < expanded {
-			newHeight = expanded
-		} else if numLines := m.getNumLines(m.textarea.Value()); numLines >= expanded {
-			newHeight = math.Clamp(numLines, expanded, m.textarea.MaxHeight)
-		}
+		numLines := m.getNumLines(m.textarea.Value())
+		newHeight = math.Clamp(numLines, expanded, m.textarea.MaxHeight)
 	} else if m.textarea.Height() > collapsed {
 		newHeight = collapsed
 	}
