@@ -78,8 +78,13 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 
 	maxTokens = int64(llm.MaxTokens)
 	fullResponseText := ""
+	output := anthropic.OutputConfigParam{}
 	if thinkingSupported = llm.props.thinking; thinkingSupported != nil && *thinkingSupported && enableThinking {
-		thinking = anthropic.ThinkingConfigParamOfEnabled(maxTokens)
+		thinking = anthropic.ThinkingConfigParamUnion{
+			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+		}
+		// TODO: control this...
+		output.Effort = anthropic.OutputConfigEffortMedium
 		if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
 			maxTokens = 2048
 		} else {
@@ -96,11 +101,12 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 	}
 
 	stream := llm.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(modelId),
-		System:    llm.systemPromptObject,
-		MaxTokens: maxTokens,
-		Messages:  llm.buildMessages(content),
-		Thinking:  thinking,
+		Model:        anthropic.Model(modelId),
+		System:       llm.systemPromptObject,
+		MaxTokens:    maxTokens,
+		Messages:     llm.buildMessages(content),
+		Thinking:     thinking,
+		OutputConfig: output,
 	})
 
 	message := anthropic.Message{}
