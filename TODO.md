@@ -1,8 +1,10 @@
 ## TODO List
 
 #### High Priority
+- try to resolve flickering (esp. during streaming) by removing fancy formatting from markdown rendering, ensuring taWidth is exactly the width that markdown is rendered at. 
 - text blinking still happening. need to add back resize whitelist to updateTextarea
-- expand TA, redraw on paste
+- impl paste substitution, before expand TA, redraw on paste
+- underlined header
 - CTRL+XE to open prompt in $EDITOR
 - textarea sizing currently done on every taCmd (keyclick etc.). slow/double resize on esc, but working. MaxHeight should be the only thing that determines this. would be nice to have a way to listen for dynamic height changes but looks like that happens internal to textarea...
 - replace full bedrock model name with `[region (red)] [short id]`

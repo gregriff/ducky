@@ -289,7 +289,7 @@ func (m *model) resizeComponents() {
 func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.windowSize = msg
 
-	var taCmd, vpCmd tea.Cmd
+	var taCmd tea.Cmd
 	// TODO: should be able to move this into constructor, and style Viewport with vp.Style
 	if !m.ready {
 		m.viewport = viewport.New(viewport.WithWidth(1), (viewport.WithHeight(1)))
@@ -301,9 +301,9 @@ func (m *model) handleWindowResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.resizeComponents()
 	}
 
-	m.viewport, vpCmd = m.viewport.Update(msg) // unness? doesnt handle this msg.
+	// m.viewport, vpCmd = m.viewport.Update(msg) // unness? doesnt handle this msg.
 	m.textarea, taCmd = m.textarea.Update(msg)
-	return m, tea.Batch(taCmd, vpCmd)
+	return m, taCmd
 }
 
 // getNumLines returns the number of lines the text in the textarea takes up (soft-wrapped).
@@ -330,6 +330,7 @@ func (m *model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 	m.viewport.SetContent(m.chat.Render(m.viewport.Width()))
 	m.viewport.GotoBottom()
 	m.textarea.SetHeight(styles.TA_HEIGHT_COLLAPSED)
+	m.resizeComponents()
 
 	m.streamCtx, m.stopStreaming = context.WithCancel(context.Background())
 	beginStreaming := func() tea.Msg {
@@ -342,7 +343,7 @@ func (m *model) promptLLM(prompt string) (tea.Model, tea.Cmd) {
 
 	return m, tea.Batch(
 		m.spinner.Tick,
-		m.redraw, // recalculate view because we've changed the textarea height
+		// m.redraw, // recalculate view because we've changed the textarea height
 		beginStreaming,
 		m.waitForNextChunk,
 	)
@@ -430,8 +431,12 @@ func (m *model) handlePaste(msg tea.PasteMsg) {
 		return
 	}
 
+	// TODO: set maxheight here?
 	newHeight := math.Clamp(wrappedLineCount, styles.TA_HEIGHT_NORMAL, m.textarea.MaxHeight)
-	m.textarea.SetHeight(newHeight) // this func clamps
+	m.textarea.SetHeight(newHeight) // this func clamps. NOTE: this calls repositionView: i.e. immediately updates
+
+	// This should prob be called instead of returning redraw command, as much as possible, for less flickering during redraws,
+	// and on the principle that repositioning should be done in one cycle: view func should not need to run twice
 	m.resizeComponents()
 }
 
@@ -492,16 +497,21 @@ func (m *model) handleEscape() (tea.Model, tea.Cmd) {
 		if m.textarea.Length() > 0 && m.chat.HistoryLen() > 0 {
 			m.textarea.Blur()
 
+			// TODO: remove fancy stuff like this. just get resizing working correctly then add back features.
 			// no need to keep textarea very large when user is trying to scroll the viewport
 			if m.textarea.Height() > styles.TA_HEIGHT_NORMAL {
 				m.textarea.SetHeight(styles.TA_HEIGHT_NORMAL)
 			}
-			return m, m.redraw
+			m.resizeComponents()
+			return m, nil
+			// return m, m.redraw
 		}
 	} else if !m.isStreaming {
 		newHeight := math.Clamp(m.textarea.Height(), styles.TA_HEIGHT_COLLAPSED, m.textarea.MaxHeight)
-		m.textarea.SetHeight(newHeight)
-		return m, tea.Sequence(m.textarea.Focus(), m.redraw)
+		m.textarea.SetHeight(newHeight) // note: this happens immediately, then redraw below would change vp height on next frame...
+		m.resizeComponents()
+		return m, m.textarea.Focus()
+		// return m, tea.Sequence(m.textarea.Focus(), m.redraw)
 	}
 	return m, nil
 }
@@ -574,7 +584,6 @@ func (m *model) handleClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 			m.textarea.MaxHeight = styles.TA_HEIGHT_NORMAL
 			// }
 			m.viewport, vpCmd = m.viewport.Update(msg)
-			// return m, tea.Batch(m.redraw, vpCmd)
 			return m, vpCmd
 		}
 
