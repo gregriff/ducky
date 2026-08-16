@@ -24,8 +24,8 @@ var modelProperties = map[string]properties{
 		id:   "claude-sonnet-5",
 		name: "sonnet-5",
 		Pricing: models.Pricing{
-			PromptCost:   3. / 1_000_000,
-			ResponseCost: 15. / 1_000_000,
+			PromptCost:   2. / 1_000_000,
+			ResponseCost: 10. / 1_000_000,
 		},
 		thinking: new(true),
 	},

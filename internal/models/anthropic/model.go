@@ -86,7 +86,7 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		// TODO: control this...
 		output.Effort = anthropic.OutputConfigEffortMedium
 		if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
-			maxTokens = 2048
+			maxTokens = 3072
 		} else {
 			maxTokens *= 2
 		}
