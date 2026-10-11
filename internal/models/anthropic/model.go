@@ -73,13 +73,13 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		// per-prompt properties (user will be able to change these at any time)
 		maxTokens         int64
 		thinking          anthropic.ThinkingConfigParamUnion
-		thinkingSupported *bool
+		thinkingSupported = llm.props.thinking
 	)
 
 	maxTokens = int64(llm.MaxTokens)
 	fullResponseText := ""
 	output := anthropic.OutputConfigParam{}
-	if thinkingSupported = llm.props.thinking; thinkingSupported != nil && *thinkingSupported && enableThinking {
+	if thinkingSupported != nil && *thinkingSupported && enableThinking {
 		thinking = anthropic.ThinkingConfigParamUnion{
 			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
 		}
@@ -123,7 +123,7 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		case anthropic.ContentBlockDeltaEvent:
 			switch deltaVariant := eventVariant.Delta.AsAny().(type) {
 			case anthropic.ThinkingDelta:
-				fullResponseText += deltaVariant.Thinking
+				// fullResponseText += deltaVariant.Thinking
 				responseChan <- models.StreamChunk{Reasoning: true, Content: deltaVariant.Thinking}
 			case anthropic.TextDelta:
 				fullResponseText += deltaVariant.Text
