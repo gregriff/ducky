@@ -17,8 +17,6 @@ type properties struct {
 
 	// name shown to user
 	name string
-
-	thinking *bool
 }
 
 // modelProperties is a map of Anthropic model names to properties about those models. Not to be modified.
@@ -30,7 +28,6 @@ var modelProperties = map[string]properties{
 			PromptCost:   2. / 1_000_000,
 			ResponseCost: 10. / 1_000_000,
 		},
-		thinking: new(true),
 	},
 	"haiku": {
 		id:   "claude-haiku-5-5",
@@ -39,7 +36,6 @@ var modelProperties = map[string]properties{
 			PromptCost:   .1 / 1_000_000,
 			ResponseCost: .5 / 1_000_000,
 		},
-		thinking: new(true),
 	},
 	"opus": {
 		id:   "claude-opus-5-5",
@@ -48,7 +44,6 @@ var modelProperties = map[string]properties{
 			PromptCost:   4. / 1_000_000,
 			ResponseCost: 20. / 1_000_000,
 		},
-		thinking: new(true),
 	},
 }
 

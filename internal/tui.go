@@ -254,9 +254,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // redraw initiates the Window resize handler. Use it after changing the dimensions of a component to make the others update.
-func (m *model) redraw() tea.Msg {
-	return m.windowSize
-}
+// func (m *model) redraw() tea.Msg {
+// 	return m.windowSize
+// }
 
 // resizeComponents calculates and sets size properties on the viewport and textarea using
 // the current window dimensions.

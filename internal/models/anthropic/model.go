@@ -69,43 +69,23 @@ func NewModel(
 func (llm *model) StreamPromptCompletion(ctx context.Context, content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
 	defer close(responseChan)
 
-	var (
-		// per-prompt properties (user will be able to change these at any time)
-		maxTokens         int64
-		thinking          anthropic.ThinkingConfigParamUnion
-		thinkingSupported = llm.props.thinking
-	)
-
-	maxTokens = int64(llm.MaxTokens)
-	fullResponseText := ""
+	maxTokens := int64(llm.MaxTokens)
+	fullResponseText := "" // strbuilder
 	output := anthropic.OutputConfigParam{}
-	if thinkingSupported != nil && *thinkingSupported && enableThinking {
-		thinking = anthropic.ThinkingConfigParamUnion{
-			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
-		}
-		// TODO: control this...
-		output.Effort = anthropic.OutputConfigEffortMedium
-		if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
-			maxTokens = 3072
-		} else {
-			maxTokens *= 2
-		}
-	} else {
-		disabled := anthropic.NewThinkingConfigDisabledParam()
-		thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
-	}
 
-	modelId := llm.ModelId()
-	if llm.bedrock {
-		modelId = "us.anthropic." + modelId // this isn't a great solution.
+	// TODO: control this...
+	output.Effort = anthropic.OutputConfigEffortMedium
+	if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
+		maxTokens = 3072
+	} else {
+		maxTokens *= 2
 	}
 
 	stream := llm.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-		Model:        anthropic.Model(modelId),
+		Model:        anthropic.Model(llm.ModelId()),
 		System:       llm.systemPromptObject,
 		MaxTokens:    maxTokens,
 		Messages:     llm.buildMessages(content),
-		Thinking:     thinking,
 		OutputConfig: output,
 	})
 
@@ -122,9 +102,6 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		switch eventVariant := event.AsAny().(type) {
 		case anthropic.ContentBlockDeltaEvent:
 			switch deltaVariant := eventVariant.Delta.AsAny().(type) {
-			case anthropic.ThinkingDelta:
-				// fullResponseText += deltaVariant.Thinking
-				responseChan <- models.StreamChunk{Reasoning: true, Content: deltaVariant.Thinking}
 			case anthropic.TextDelta:
 				fullResponseText += deltaVariant.Text
 				responseChan <- models.StreamChunk{Reasoning: false, Content: deltaVariant.Text}
@@ -192,6 +169,9 @@ func (llm *model) ChatHistory() []models.Message {
 }
 
 func (llm *model) ModelId() string {
+	if llm.bedrock {
+		return "us.anthropic." + llm.props.id
+	}
 	return llm.props.id
 }
 
@@ -205,8 +185,5 @@ func (llm *model) ModelInfoText() string {
 }
 
 func (llm *model) SupportsReasoning() bool {
-	if thinking := llm.props.thinking; thinking != nil && *thinking {
-		return true
-	}
-	return false
+	return true
 }
