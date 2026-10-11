@@ -62,27 +62,27 @@ func init() {
 
 	var flagName string
 
-	flagName = "model.system-prompt"
+	flagName = "system-prompt"
 	rootCmd.PersistentFlags().StringP(flagName, "P", "", "system prompt that will influence model responses")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, "You are a concise assistant to a software engineer")
 
-	flagName = "model.reasoning"
+	flagName = "reasoning"
 	rootCmd.PersistentFlags().BoolP(flagName, "r", true, "enable reasoning/thinking for supported models")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, true)
 
-	flagName = "openai.reasoning-effort"
+	flagName = "reasoning-effort"
 	rootCmd.PersistentFlags().Uint8P(flagName, "e", 4, "reasoning effort to be used for specific OpenAI reasoning models. (1-4)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, 4)
 
-	flagName = "model.max-tokens"
+	flagName = "max-tokens"
 	rootCmd.PersistentFlags().IntP(flagName, "t", 0, "output token budget for each response")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, 2048)
 
-	flagName = "ui.style"
+	flagName = "style"
 	rootCmd.PersistentFlags().StringP(flagName, "s", "", "glamour style used to render Markdown responses (default tokyo-night)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, "tokyo-night")
@@ -92,19 +92,19 @@ func init() {
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 	viper.SetDefault(flagName, false)
 
-	flagName = "anthropic.api-key"
+	flagName = "anthropic-api-key"
 	rootCmd.PersistentFlags().String(flagName, "", "allows access to Claude models")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 
-	flagName = "openai.api-key"
+	flagName = "openai-api-key"
 	rootCmd.PersistentFlags().String(flagName, "", "allows access to OpenAI models")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 
-	flagName = "anthropic.bedrock"
+	flagName = "bedrock"
 	rootCmd.PersistentFlags().Bool(flagName, false, "use bedrock client (anthropic only)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 
-	flagName = "tls.certs-path"
+	flagName = "certs-path"
 	rootCmd.PersistentFlags().String(flagName, "", "path to .pem file containing extra CA certs (bedrock only)")
 	_ = viper.BindPFlag(flagName, rootCmd.PersistentFlags().Lookup(flagName))
 }

@@ -112,9 +112,6 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		// 	log.Println("response reasoning summary text done event: ")
 		// case responses.ResponseReasoningTextDoneEvent:
 		// 	log.Println("response reasoning text done event: ")
-		case responses.ResponseReasoningTextDeltaEvent:
-			fullResponseText += eventVariant.Delta
-			responseChan <- models.StreamChunk{Reasoning: true, Content: chunk.Delta}
 		case responses.ResponseTextDeltaEvent:
 			fullResponseText += eventVariant.Delta
 			responseChan <- models.StreamChunk{Reasoning: false, Content: chunk.Delta}

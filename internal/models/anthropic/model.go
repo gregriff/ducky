@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -16,13 +17,18 @@ type model struct {
 	client             anthropic.Client
 	props              properties
 	systemPromptObject []anthropic.TextBlockParam
-	// TODO: add usage field
+	// TODO: add total session usage field
 
 	// price in dollars. getter should fmt it to cents if small enough. should
 	// be updated after each response stream completes, using current model's pricing.
 	// should be reset on clear
 	totalCost float64
-	bedrock   bool
+
+	// whether to use aws bedrock.
+	bedrock bool
+
+	// stores each full response.
+	fullResponseText *strings.Builder
 }
 
 // NewModel creates a new Anthropic Model to be used for response streaming.
@@ -51,6 +57,8 @@ func NewModel(
 	}
 
 	client := anthropic.NewClient(opts...)
+	sb := strings.Builder{}
+	sb.Grow(maxTokens)
 	m := &model{
 		BaseLLM: models.BaseLLM{
 			SystemPrompt: systemPrompt,
@@ -62,15 +70,16 @@ func NewModel(
 		props:              modelProperties[modelName],
 		systemPromptObject: []anthropic.TextBlockParam{{Text: systemPrompt}},
 		bedrock:            bedrockConfig != nil,
+		fullResponseText:   &sb,
 	}
 	return m, nil
 }
 
 func (llm *model) StreamPromptCompletion(ctx context.Context, content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
+	defer llm.fullResponseText.Reset()
 	defer close(responseChan)
 
 	maxTokens := int64(llm.MaxTokens)
-	fullResponseText := "" // strbuilder
 	output := anthropic.OutputConfigParam{}
 
 	// TODO: control this...
@@ -81,12 +90,26 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		maxTokens *= 2
 	}
 
+	// disable thinking if using haiku, or the user has said so.
+	// cannot disable thinking on opus currently.
+	thinking := anthropic.ThinkingConfigParamUnion{}
+	if strings.Contains(llm.ModelId(), "haiku") {
+		thinking.OfDisabled = &anthropic.ThinkingConfigDisabledParam{}
+	} else if !enableThinking && !strings.Contains(llm.ModelId(), "opus") {
+		thinking.OfBetweenTools = &anthropic.ThinkingConfigBetweenToolsParam{}
+	} else {
+		thinking.OfAdaptive = &anthropic.ThinkingConfigAdaptiveParam{
+			Display: anthropic.ThinkingConfigAdaptiveDisplayOmitted,
+		}
+	}
+
 	stream := llm.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
 		Model:        anthropic.Model(llm.ModelId()),
 		System:       llm.systemPromptObject,
 		MaxTokens:    maxTokens,
 		Messages:     llm.buildMessages(content),
 		OutputConfig: output,
+		Thinking:     thinking,
 	})
 
 	message := anthropic.Message{}
@@ -94,8 +117,7 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 	inputTokens, outputTokens := 0., 0.
 	for stream.Next() {
 		event := stream.Current()
-		err := message.Accumulate(event)
-		if err != nil {
+		if err := message.Accumulate(event); err != nil {
 			return errors.New(stream.Err().Error())
 		}
 
@@ -103,10 +125,10 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 		case anthropic.ContentBlockDeltaEvent:
 			switch deltaVariant := eventVariant.Delta.AsAny().(type) {
 			case anthropic.TextDelta:
-				fullResponseText += deltaVariant.Text
+				llm.fullResponseText.WriteString(deltaVariant.Text)
 				responseChan <- models.StreamChunk{Reasoning: false, Content: deltaVariant.Text}
 			case anthropic.CitationsDelta:
-				fullResponseText += deltaVariant.Citation.CitedText
+				llm.fullResponseText.WriteString(deltaVariant.Citation.CitedText)
 				responseChan <- models.StreamChunk{Reasoning: false, Content: deltaVariant.Citation.CitedText}
 			}
 		case anthropic.MessageDeltaEvent:
@@ -125,8 +147,8 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 	llm.totalCost += inputCost + outputCost
 	llm.PromptCount++
 
-	if len(fullResponseText) > 0 {
-		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: fullResponseText})
+	if llm.fullResponseText.Len() > 0 {
+		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: llm.fullResponseText.String()})
 	}
 	return nil
 }
@@ -161,7 +183,6 @@ func (llm *model) ClearChatHistory() {
 	llm.totalCost = 0
 	llm.PromptCount = 0
 	llm.Messages = []models.Message{}
-	// TODO: reset usage
 }
 
 func (llm *model) ChatHistory() []models.Message {
