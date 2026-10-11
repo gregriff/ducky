@@ -13,16 +13,19 @@ type properties struct {
 	models.Pricing
 
 	// official id from anthropic's API
-	id,
+	id string
+
+	// name shown to user
 	name string
+
 	thinking *bool
 }
 
 // modelProperties is a map of Anthropic model names to properties about those models. Not to be modified.
 var modelProperties = map[string]properties{
 	"sonnet": {
-		id:   "claude-sonnet-5",
-		name: "sonnet-5",
+		id:   "claude-sonnet-5-5",
+		name: "sonnet-5-5",
 		Pricing: models.Pricing{
 			PromptCost:   2. / 1_000_000,
 			ResponseCost: 10. / 1_000_000,
@@ -30,19 +33,20 @@ var modelProperties = map[string]properties{
 		thinking: new(true),
 	},
 	"haiku": {
-		id:   "claude-haiku-4-5",
-		name: "haiku-4-5",
+		id:   "claude-haiku-5-5",
+		name: "haiku-5-5",
 		Pricing: models.Pricing{
-			PromptCost:   1. / 1_000_000,
-			ResponseCost: 5. / 1_000_000,
+			PromptCost:   .1 / 1_000_000,
+			ResponseCost: .5 / 1_000_000,
 		},
+		thinking: new(true),
 	},
 	"opus": {
-		id:   "claude-opus-4-8",
-		name: "opus-4-8",
+		id:   "claude-opus-5-5",
+		name: "opus-5-5",
 		Pricing: models.Pricing{
-			PromptCost:   5. / 1_000_000,
-			ResponseCost: 25. / 1_000_000,
+			PromptCost:   4. / 1_000_000,
+			ResponseCost: 20. / 1_000_000,
 		},
 		thinking: new(true),
 	},
