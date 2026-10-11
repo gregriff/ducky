@@ -21,13 +21,9 @@ func buildBedrockConfig(
 	bedrockConfig *models.BedrockConfig,
 	opts []option.RequestOption,
 ) ([]option.RequestOption, error) {
-	var httpClient config.HTTPClient
-	var err error
-	if bedrockConfig.ExtraCerts {
-		httpClient, err = newCustomCertClient(bedrockConfig.CertsPath)
-		if err != nil {
-			return nil, fmt.Errorf("error creating httpClient with extra certs: %w", err)
-		}
+	httpClient, err := newCustomCertClient(bedrockConfig.CertsPath)
+	if err != nil {
+		return nil, fmt.Errorf("error creating httpClient with extra certs: %w", err)
 	}
 
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithHTTPClient(httpClient))

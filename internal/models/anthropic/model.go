@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -16,12 +17,18 @@ type model struct {
 	client             anthropic.Client
 	props              properties
 	systemPromptObject []anthropic.TextBlockParam
-	// TODO: add usage field
+	// TODO: add total session usage field
 
 	// price in dollars. getter should fmt it to cents if small enough. should
 	// be updated after each response stream completes, using current model's pricing.
 	// should be reset on clear
 	totalCost float64
+
+	// whether to use aws bedrock.
+	bedrock bool
+
+	// stores each full response.
+	fullResponseText *strings.Builder
 }
 
 // NewModel creates a new Anthropic Model to be used for response streaming.
@@ -43,7 +50,6 @@ func NewModel(
 	var opts []option.RequestOption
 	var err error
 	if bedrockConfig != nil {
-		modelName += "-bedrock"
 		opts, err = buildBedrockConfig(context.TODO(), bedrockConfig, opts)
 		if err != nil {
 			return nil, err
@@ -51,6 +57,8 @@ func NewModel(
 	}
 
 	client := anthropic.NewClient(opts...)
+	sb := strings.Builder{}
+	sb.Grow(maxTokens)
 	m := &model{
 		BaseLLM: models.BaseLLM{
 			SystemPrompt: systemPrompt,
@@ -61,40 +69,47 @@ func NewModel(
 		client:             client, // by default uses os.LookupEnv("ANTHROPIC_API_KEY") TODO: use viper config var
 		props:              modelProperties[modelName],
 		systemPromptObject: []anthropic.TextBlockParam{{Text: systemPrompt}},
+		bedrock:            bedrockConfig != nil,
+		fullResponseText:   &sb,
 	}
 	return m, nil
 }
 
 func (llm *model) StreamPromptCompletion(ctx context.Context, content string, enableThinking bool, _ *uint8, responseChan chan models.StreamChunk) error {
+	defer llm.fullResponseText.Reset()
 	defer close(responseChan)
 
-	var (
-		// per-prompt properties (user will be able to change these at any time)
-		maxTokens         int64
-		thinking          anthropic.ThinkingConfigParamUnion
-		thinkingSupported *bool
-	)
+	maxTokens := int64(llm.MaxTokens)
+	output := anthropic.OutputConfigParam{}
 
-	maxTokens = int64(llm.MaxTokens)
-	fullResponseText := ""
-	if thinkingSupported = llm.props.thinking; thinkingSupported != nil && *thinkingSupported && enableThinking {
-		thinking = anthropic.ThinkingConfigParamOfEnabled(maxTokens)
-		if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
-			maxTokens = 2048
-		} else {
-			maxTokens *= 2
-		}
+	// TODO: control this...
+	output.Effort = anthropic.OutputConfigEffortMedium
+	if maxTokens <= 1024 { // https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#max-tokens-and-context-window-size
+		maxTokens = 3072
 	} else {
-		disabled := anthropic.NewThinkingConfigDisabledParam()
-		thinking = anthropic.ThinkingConfigParamUnion{OfDisabled: &disabled}
+		maxTokens *= 2
+	}
+
+	// disable thinking if using haiku, or the user has said so.
+	// cannot disable thinking on opus currently.
+	thinking := anthropic.ThinkingConfigParamUnion{}
+	if strings.Contains(llm.ModelId(), "haiku") {
+		thinking.OfDisabled = &anthropic.ThinkingConfigDisabledParam{}
+	} else if !enableThinking && !strings.Contains(llm.ModelId(), "opus") {
+		thinking.OfBetweenTools = &anthropic.ThinkingConfigBetweenToolsParam{}
+	} else {
+		thinking.OfAdaptive = &anthropic.ThinkingConfigAdaptiveParam{
+			Display: anthropic.ThinkingConfigAdaptiveDisplayOmitted,
+		}
 	}
 
 	stream := llm.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(llm.props.id),
-		System:    llm.systemPromptObject,
-		MaxTokens: maxTokens,
-		Messages:  llm.buildMessages(content),
-		Thinking:  thinking,
+		Model:        anthropic.Model(llm.ModelId()),
+		System:       llm.systemPromptObject,
+		MaxTokens:    maxTokens,
+		Messages:     llm.buildMessages(content),
+		OutputConfig: output,
+		Thinking:     thinking,
 	})
 
 	message := anthropic.Message{}
@@ -102,22 +117,18 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 	inputTokens, outputTokens := 0., 0.
 	for stream.Next() {
 		event := stream.Current()
-		err := message.Accumulate(event)
-		if err != nil {
+		if err := message.Accumulate(event); err != nil {
 			return errors.New(stream.Err().Error())
 		}
 
 		switch eventVariant := event.AsAny().(type) {
 		case anthropic.ContentBlockDeltaEvent:
 			switch deltaVariant := eventVariant.Delta.AsAny().(type) {
-			case anthropic.ThinkingDelta:
-				fullResponseText += deltaVariant.Thinking
-				responseChan <- models.StreamChunk{Reasoning: true, Content: deltaVariant.Thinking}
 			case anthropic.TextDelta:
-				fullResponseText += deltaVariant.Text
+				llm.fullResponseText.WriteString(deltaVariant.Text)
 				responseChan <- models.StreamChunk{Reasoning: false, Content: deltaVariant.Text}
 			case anthropic.CitationsDelta:
-				fullResponseText += deltaVariant.Citation.CitedText
+				llm.fullResponseText.WriteString(deltaVariant.Citation.CitedText)
 				responseChan <- models.StreamChunk{Reasoning: false, Content: deltaVariant.Citation.CitedText}
 			}
 		case anthropic.MessageDeltaEvent:
@@ -136,8 +147,8 @@ func (llm *model) StreamPromptCompletion(ctx context.Context, content string, en
 	llm.totalCost += inputCost + outputCost
 	llm.PromptCount++
 
-	if len(fullResponseText) > 0 {
-		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: fullResponseText})
+	if llm.fullResponseText.Len() > 0 {
+		llm.Messages = append(llm.Messages, models.Message{Role: "assistant", Content: llm.fullResponseText.String()})
 	}
 	return nil
 }
@@ -172,7 +183,6 @@ func (llm *model) ClearChatHistory() {
 	llm.totalCost = 0
 	llm.PromptCount = 0
 	llm.Messages = []models.Message{}
-	// TODO: reset usage
 }
 
 func (llm *model) ChatHistory() []models.Message {
@@ -180,12 +190,21 @@ func (llm *model) ChatHistory() []models.Message {
 }
 
 func (llm *model) ModelId() string {
+	if llm.bedrock {
+		return "us.anthropic." + llm.props.id
+	}
 	return llm.props.id
 }
 
-func (llm *model) SupportsReasoning() bool {
-	if thinking := llm.props.thinking; thinking != nil && *thinking {
-		return true
+func (llm *model) ModelInfoText() string {
+	if llm.bedrock {
+		return "[bedrock] " + llm.props.name
+		// return lipgloss.NewStyle().
+		// Foreground(lipgloss.Color("21")).Render("[bedrock]") + " " + llm.ModelId()
 	}
-	return false
+	return llm.props.name
+}
+
+func (llm *model) SupportsReasoning() bool {
+	return true
 }

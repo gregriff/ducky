@@ -1,14 +1,26 @@
 ## TODO List
 
 #### High Priority
+- try to resolve flickering (esp. during streaming) by removing fancy formatting from markdown rendering, ensuring taWidth is exactly the width that markdown is rendered at. 
+- text blinking still happening. need to add back resize whitelist to updateTextarea
+- impl paste substitution, before expand TA, redraw on paste
+- underlined header
+- CTRL+XE to open prompt in $EDITOR
+- textarea sizing currently done on every taCmd (keyclick etc.). slow/double resize on esc, but working. MaxHeight should be the only thing that determines this. would be nice to have a way to listen for dynamic height changes but looks like that happens internal to textarea...
+- replace full bedrock model name with `[region (red)] [short id]`
 - capture CTRL+Enter for newline in prompt
-- ctrl+L clears
+- add tests for scrollback and other functionaltiy
+- test using tea.sequence instead of batch for vp+ta updates and any other redraw stuff. 
+- check out lipgloss's compositor
+- allow customization of lipgloss.TabWidth for md rendering
+- pasting many lines of text should not result in only last line of text being shown, but Ideally, dont even show text, replace it with a CC-like stub (ideally clickable, triggering a bubbles popup with it formatted). 
+- when TA is full of text and able to be scrolled, ESC to focus VP, scroll VP, then ESC to focus TA. this will inc. or dec. TA height by 1. It will alternate heights between 2 ints. This does not happen when clicking them to focus them. Could be not returning early in the ESC focus path? 
+- use fzf tmux scrolling behavior as reference. But first, test the textara bubble outside of ducky, to see its full capabilities and ensure you're using all of its features. 
 - command bar, can switch effort level. make effort cli arg apply to latest sonnet.
 - command to save cur convo as raw markdown to a file. 
 - collapse text from a large paste into a little button, denoting the # lines pasted. 
 - I THINK PASTING IS CAUSING SLOWDOWN: sluggishness after many prompts, textarea not responsive and eats 90MB and 12% CPU
 - sql from SQL_BUG.txt, if pasted into prompt, freezes entire program
-- look into sonnet 4-6 config to lower costs, it seems to be doing multi-shot on its own for complex programming prompts
   ==> REASONING EFFORT: incp. this into anthropic models, its already with openai models
 - unload far away text from screen buffer and keep in chat-entries to be lazy loaded once scroll area is near it again: 
   - print m.viewport.YOffset() to debug scroll pos
@@ -22,11 +34,12 @@
 
 #### Bugs:
 - cursor should be placed at end of line when placeholder shows up, and should blink/focus on application start
+- arrow key up does not move cursor when textarea has multiple lines
 - textarea is not foused on startup on tmux
 - scrollback history is not preserved after clearing history. Fix this by adding an `entireHistory` field to chat.Model, where `history` is initially this same slice, but after a CLEAR HISTORY, it becomes a re-slice of `entireHistory`. only the scrollback functionality should use `entireHistory`. refer to book page 67 when implementing this
 
 #### Refactors:
-- rethink LLM interface design, middle layer not needed?
+- n/a
 
 #### UI:
 - only show cost when holding settings key
